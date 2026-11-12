@@ -217,7 +217,113 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     return null;
   };
 
-  S._ = { sum, round2, byId, product, T, fmt, ccQty };
+  /* ---------- กดเบิก · อนุมัติ · รายการต้องซื้อ · แจ้งเตือน ---------- */
+
+  const now = () => new Date().toISOString();
+  const usersWith = (state, ...roles) => state.users.filter(u => roles.includes(u.role)).map(u => u.id);
+  const docId = (prefix, n, pad) => prefix + String(n).padStart(pad, '0');
+
+  S.notify = function (state, toUserIds, level, text, link = null) {
+    for (const toUserId of toUserIds)
+      state.notifs.push({ id: state.notifs.length + 1, toUserId, level, text, link, read: false, at: now() });
+  };
+  S.unread = (state, userId) => state.notifs.filter(n => n.toUserId === userId && !n.read);
+
+  S.needsApproval = (state, userId) => state.settings.reqApproval && byId(state.users, userId).role !== 'head';
+
+  // หยิบของออกจากคลังจริงตามแผน แล้วบันทึกลงรายการของใบเบิก
+  function dispense(state, req, line, plan) {
+    if (plan.give <= 0) return;
+    if (plan.product.isRoll) {
+      for (const c of plan.cuts) {
+        const roll = byId(state.rolls, c.rollId);
+        roll.length = c.left; roll.opened = true;
+        if (roll.length <= 0) state.rolls.splice(state.rolls.indexOf(roll), 1);
+        line.cuts.push(c);
+      }
+    } else {
+      let need = plan.give;
+      for (const row of state.stock.filter(x => x.productId === line.productId && x.whId === req.whId)) {
+        const take = Math.min(need, row.qty);
+        row.qty = round2(row.qty - take); need = round2(need - take);
+        if (take > 0) line.shelf = row.shelf;
+      }
+    }
+    line.issued = round2(line.issued + plan.give);
+  }
+
+  const settle = (req) => {
+    req.status = req.lines.every(l => l.issued >= l.qty) ? 'issued' : req.lines.some(l => l.issued > 0) ? 'partial' : 'waiting';
+  };
+
+  function createPR(state, req, productId, qty) {
+    const pr = { id: docId('PR-', state.seq.pr++, 6), reqId: req.id, productId, whId: req.whId, qty, received: 0, status: 'open', at: now() };
+    state.prs.push(pr);
+    S.notify(state, usersWith(state, 'store', 'head'), 'info', T.N68(pr.id, req.id), '#/restock');
+    return pr;
+  }
+
+  // จ่ายของเท่าที่มี ส่วนที่ขาดกลายเป็นรายการต้องซื้อ (หรือรอยอดที่ Store ยังไม่ยืนยัน)
+  function fulfil(state, req) {
+    const prs = [];
+    if (state.settings.demoPickFail) {
+      state.settings.demoPickFail = false;
+      for (const line of req.lines) line.reserved = Math.min(line.qty, Math.max(0, S.available(state, line.productId, req.whId)));
+      req.status = 'pick_failed';
+      return prs;
+    }
+    for (const line of req.lines) {
+      const plan = S.planLine(state, { ...line, qty: round2(line.qty - line.issued) }, req.whId);
+      dispense(state, req, line, plan);
+      const short = round2(line.qty - line.issued);
+      const cc = plan.pendingCC;
+      if (short > 0 && !(cc && ccQty(cc) >= short)) prs.push(createPR(state, req, line.productId, short));
+    }
+    settle(req);
+    return prs;
+  }
+
+  S.issueNow = function (state, userId) {
+    const cart = state.cart;
+    if (!S.linesReady(state, cart.lines)) throw new Error(T.N56.incomplete);
+    const wh = byId(state.warehouses, cart.whId), job = byId(state.jobs, cart.jobId);
+    if (!wh) throw new Error(T.N56.noWh);
+    if (!job) throw new Error(T.N56.noJob);
+    if (wh.locked) throw new Error(T.N56.locked);
+    if (!job.open) throw new Error(T.N56.jobClosed(job.id));
+    const plan = S.planIssue(state, cart.lines, wh.id);
+    if (plan.blocked) throw new Error(T.N55(plan.firstErrorShort));
+
+    const req = {
+      id: docId('REQ-', state.seq.req++, 6), userId, whId: wh.id, jobId: job.id, note: cart.note || '', status: 'waiting', at: now(),
+      lines: cart.lines.map(l => ({ productId: l.productId, qty: Number(l.qty), issued: 0, reserved: 0, returned: 0, single: !!l.single, cuts: [] })),
+    };
+    state.reqs.push(req);
+    let prs = [];
+    if (S.needsApproval(state, userId)) {
+      req.status = 'pending_approval';
+      S.notify(state, usersWith(state, 'head'), 'info',
+        T.N65(req.id, byId(state.users, userId).name, req.lines.length, job.name), '#/approvals');
+    } else prs = fulfil(state, req);
+    cart.lines = []; cart.note = '';        // เก็บคลังและงานไว้ให้ "เบิกต่อ"
+    return { outcome: req.status, req, prs };
+  };
+
+  S.approveReq = function (state, reqId, approverId, ok, reason = '') {
+    const req = byId(state.reqs, reqId);
+    if (!req || req.status !== 'pending_approval') throw new Error('ใบเบิกนี้ไม่ได้รออนุมัติ');
+    if (ok) {
+      fulfil(state, req);
+      S.notify(state, [req.userId], 'ok', T.N66(req.id), '#/orders/' + req.id);
+    } else {
+      if (!reason.trim()) throw new Error('กรุณาระบุเหตุผลที่ไม่อนุมัติ');
+      req.status = 'rejected'; req.reason = reason.trim();
+      S.notify(state, [req.userId], 'bad', T.N67(req.id, req.reason), '#/orders/' + req.id);
+    }
+    return req;
+  };
+
+  S._ = { sum, round2, byId, product, T, fmt, ccQty, now, usersWith, docId, dispense, settle, createPR };
 })();
 
 if (typeof module !== 'undefined') module.exports = SM;
