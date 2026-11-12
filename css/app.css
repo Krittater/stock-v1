@@ -325,3 +325,6 @@ dialog.dlg::backdrop { background: rgb(12 16 15 / .55); }
 .tl-dot .ic { width: 16px; height: 16px; stroke-width: 2.5; }
 .timeline li.done .tl-dot { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
 .timeline li.bad .tl-dot { background: var(--bad-bg); border-color: var(--bad-line); color: var(--bad-text); }
+
+/* เติมสต็อก */
+.whnums { display: grid; gap: 8px 16px; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); margin: 0; padding-top: 12px; border-top: 1px solid var(--line); }
