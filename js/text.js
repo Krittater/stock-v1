@@ -111,4 +111,15 @@ SM.T = {
     + (reqIds.length ? ` ใบเบิก ${reqIds.join(', ')} ยังรออยู่ ระบบสร้างรายการต้องซื้อให้แล้ว` : ''),
 };
 
+// ป้ายสถานะใบเบิก (ไอคอน + คำ ไม่พึ่งสีอย่างเดียว)
+SM.T.status = (status) => ({
+  issued: { label: 'จ่ายครบ', icon: 'check', tone: 'ok' },
+  partial: { label: 'จ่ายบางส่วน', icon: 'warn', tone: 'warn' },
+  waiting: { label: 'รอของเข้า', icon: 'clock', tone: 'info' },
+  ready: { label: 'ของเข้าแล้ว รอหยิบ', icon: 'box', tone: 'ok' },
+  pending_approval: { label: 'รออนุมัติ', icon: 'send', tone: 'info' },
+  rejected: { label: 'ไม่อนุมัติ', icon: 'x', tone: 'bad' },
+  pick_failed: { label: 'จ่ายไม่สำเร็จ', icon: 'warn', tone: 'warn' },
+}[status] || { label: status, icon: 'info', tone: 'info' });
+
 if (typeof module !== 'undefined') module.exports = SM;

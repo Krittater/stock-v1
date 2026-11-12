@@ -312,3 +312,16 @@ dialog.dlg::backdrop { background: rgb(12 16 15 / .55); }
 }
 .whopt > .grow { flex-basis: 150px; }
 .whopt .tag { white-space: normal; }
+
+/* ใบเบิก / คืนของ */
+.ocard { display: grid; gap: 8px; text-decoration: none; color: inherit; }
+.ocard:hover { border-color: var(--brand); }
+.info { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: 0; }
+.nums { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); margin: 0; }
+.timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.timeline li { display: flex; gap: 12px; align-items: flex-start; color: var(--muted); }
+.timeline li.done { color: var(--text); }
+.tl-dot { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; flex: none; background: var(--sub); border: 1px solid var(--line2); }
+.tl-dot .ic { width: 16px; height: 16px; stroke-width: 2.5; }
+.timeline li.done .tl-dot { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
+.timeline li.bad .tl-dot { background: var(--bad-bg); border-color: var(--bad-line); color: var(--bad-text); }
