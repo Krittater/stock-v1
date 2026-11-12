@@ -61,7 +61,7 @@ SM.seed = function () {
       { id: 'J-24-012', name: 'ติดตั้งตู้ MDB อาคารสำนักงานใหญ่', customer: 'บจก. สยามพร็อพเพอร์ตี้', open: true },
       { id: 'J-24-031', name: 'ติดตั้งระบบไฟฟ้า อาคาร A โครงการริเวอร์ไซด์', customer: 'บจก. ริเวอร์ไซด์ ดีเวลลอปเมนท์', open: true },
     ],
-    cart: { lines: [], whId: null, whAuto: false, jobId: null, note: '' },
+    cart: { lines: [], whId: null, whAuto: false, whCleared: false, jobId: null, note: '' },
     reqs: [{
       id: 'REQ-690006', userId: 'u-eng', whId: 'wh-main', jobId: 'J-25-010', note: '', status: 'issued', at: '2026-11-08T09:15:00',
       lines: [

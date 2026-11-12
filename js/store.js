@@ -126,7 +126,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       everStocked: state.stock.some(x => x.productId === p.id) || state.rolls.some(r => r.productId === p.id)
         || state.reqs.some(r => r.lines.some(l => l.productId === p.id && l.issued > 0)),
     };
-    const fail = (full, short) => { plan.error = full; plan.errorShort = short; return plan; };
+    const fail = (full, short) => { plan.error = full; plan.errorShort = short; plan.give = 0; plan.short = want; return plan; };
     if (wh.locked) return fail(T.N37(p.name), `${p.name} · คลังนี้กำลังตรวจนับ`);
 
     if (p.isRoll) {
@@ -140,7 +140,8 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
           return fail(T.N38(p.name, fmt(want, p.unit), fmt(longest, p.unit)),
             `${p.name} · ไม่มีม้วนไหนยาว ${fmt(want, p.unit)} ในคลังนี้`);
         }
-        plan.cuts = [cut(fit, want)];
+        // ม้วนยาวพอแต่ยอดเบิกได้ไม่ถึง (ส่วนหนึ่งกันไว้ให้ใบอื่น) → ไม่ตัด รอของทั้งจำนวน
+        if (want <= have) plan.cuts = [cut(fit, want)]; else plan.give = 0;
       } else {
         // ม้วนที่เปิดแล้วก่อน แล้วม้วนเก่าสุด
         let need = plan.give;
@@ -209,8 +210,8 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
   S.syncCartWarehouse = function (state) {
     const cart = state.cart;
     const wh = cart.whId && byId(state.warehouses, cart.whId);
-    if (wh && wh.locked) { cart.whId = null; cart.whAuto = false; return T.N36(wh.name); }
-    if (!cart.whId && S.linesReady(state, cart.lines)) {
+    if (wh && wh.locked) { cart.whId = null; cart.whAuto = false; cart.whCleared = true; return T.N36(wh.name); }
+    if (!cart.whId && !cart.whCleared && S.linesReady(state, cart.lines)) {
       const auto = S.autoWarehouse(state, cart.lines);
       if (auto) { cart.whId = auto; cart.whAuto = true; }
     }
@@ -233,7 +234,8 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
 
   // หยิบของออกจากคลังจริงตามแผน แล้วบันทึกลงรายการของใบเบิก
   function dispense(state, req, line, plan) {
-    if (plan.give <= 0) return;
+    if (plan.error || plan.give <= 0) return;
+    let out = plan.give;
     if (plan.product.isRoll) {
       for (const c of plan.cuts) {
         const roll = byId(state.rolls, c.rollId);
@@ -241,6 +243,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
         if (roll.length <= 0) state.rolls.splice(state.rolls.indexOf(roll), 1);
         line.cuts.push(c);
       }
+      out = sum(plan.cuts, c => c.cut);      // จ่ายแล้ว = ที่ตัดออกจากม้วนจริงเท่านั้น
     } else {
       let need = plan.give;
       for (const row of state.stock.filter(x => x.productId === line.productId && x.whId === req.whId)) {
@@ -249,7 +252,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
         if (take > 0) line.shelf = row.shelf;
       }
     }
-    line.issued = round2(line.issued + plan.give);
+    line.issued = round2(line.issued + out);
   }
 
   const settle = (req) => {
@@ -316,6 +319,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     const req = byId(state.reqs, reqId);
     if (!req || req.status !== 'pending_approval') throw new Error('ใบเบิกนี้ไม่ได้รออนุมัติ');
     if (ok) {
+      if (byId(state.warehouses, req.whId).locked) throw new Error(T.N56.locked);
       fulfil(state, req);
       S.notify(state, [req.userId], 'ok', T.N66(req.id), '#/orders/' + req.id);
     } else {
@@ -359,7 +363,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
   function reserveForWaiting(state, productId, whId) {
     const readied = [];
     for (const req of state.reqs) {
-      if (req.whId !== whId || !['waiting', 'partial'].includes(req.status)) continue;
+      if (req.whId !== whId || !['waiting', 'partial', 'pick_failed'].includes(req.status)) continue;
       let got = false;
       for (const line of req.lines.filter(l => l.productId === productId)) {
         const give = Math.min(round2(line.qty - line.issued - line.reserved), Math.max(0, S.available(state, productId, whId)));
@@ -375,7 +379,9 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
 
   S.receiveStock = function (state, { productId, whId, qty, rollLengths, prId }) {
     const p = product(state, productId);
-    openWh(state, whId);
+    const wh = openWh(state, whId);
+    const forPr = prId ? byId(state.prs, prId) : null;
+    if (forPr && forPr.whId !== wh.id) throw new Error(`รายการต้องซื้อ ${forPr.id} ต้องรับเข้า${byId(state.warehouses, forPr.whId).name}`);
     const incoming = stockIn(state, p, whId, { qty, rollLengths });
     incoming.apply();
     // PR ที่ระบุรับยอดทั้งหมด (รับเกินได้) ถ้าไม่ระบุ ไล่ตัดรายการต้องซื้อที่ค้างของสินค้า+คลังนี้
@@ -395,9 +401,12 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     if (!req || !req.lines.some(l => l.reserved > 0)) throw new Error('ใบเบิกนี้ไม่มีของที่กันไว้ให้จ่าย');
     openWh(state, req.whId);
     for (const line of req.lines.filter(l => l.reserved > 0)) {
-      const give = line.reserved;
+      const give = line.reserved, was = line.issued;
       line.reserved = 0;                       // ปล่อยที่กันไว้ก่อน ไม่งั้นยอดเบิกได้จะไม่นับของก้อนนี้
-      dispense(state, req, line, S.planLine(state, { ...line, qty: give }, req.whId));
+      const plan = S.planLine(state, { ...line, qty: give }, req.whId);
+      if (plan.error) { line.reserved = give; throw new Error(plan.error); }
+      dispense(state, req, line, plan);
+      line.reserved = round2(give - (line.issued - was));   // ส่วนที่ยังจ่ายไม่ได้ กันไว้ต่อ
     }
     settle(req);
     if (userId !== req.userId) S.notify(state, [req.userId], 'info', T.N69(req.id, req.status === 'issued'), '#/orders/' + req.id);
@@ -484,6 +493,20 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     return { product: p, cc, toast: T.N22(p, incoming.text, cc.id) };
   };
 
+  // ใบเบิกที่ยังขาดของและไม่มีรายการต้องซื้อค้างอยู่ → สร้างให้ คืนเลขใบเบิกที่ได้รายการใหม่
+  function ensurePRs(state, productId, whId) {
+    const made = [];
+    for (const req of state.reqs.filter(r => r.whId === whId && ['waiting', 'partial'].includes(r.status))) {
+      for (const line of req.lines.filter(l => l.productId === productId)) {
+        const short = round2(line.qty - line.issued - line.reserved);
+        if (short > 0 && !state.prs.some(x => x.reqId === req.id && x.productId === productId && x.status === 'open')) {
+          createPR(state, req, productId, short); made.push(req.id);
+        }
+      }
+    }
+    return made;
+  }
+
   S.confirmCC = function (state, ccId, userId, ok, reason = '') {
     const cc = byId(state.ccs, ccId);
     if (!cc || cc.status !== 'pending') throw new Error('รายการนี้ไม่ได้รอยืนยันยอด');
@@ -494,20 +517,13 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       incoming.apply(); cc.status = 'ok';
       S.notify(state, [cc.byUserId], 'ok', T.N72(p.name, incoming.text));
       reserveForWaiting(state, p.id, cc.whId);
+      ensurePRs(state, p.id, cc.whId);       // ใบที่ยอดนี้ไม่พอให้ ต้องไปอยู่ในรายการต้องซื้อ
       return cc;
     }
     if (!reason.trim()) throw new Error('กรุณาระบุเหตุผล');
     cc.status = 'rejected'; cc.reason = reason.trim();
     // ponytail: คำถามเปิดข้อ 2 ยังไม่ตัดสิน — ทำตามคำแนะนำ BA: สร้างรายการต้องซื้อให้ใบเบิกที่รอยอดนี้อยู่
-    const waiting = [];
-    for (const req of state.reqs.filter(r => r.whId === cc.whId && ['waiting', 'partial'].includes(r.status))) {
-      for (const line of req.lines.filter(l => l.productId === p.id)) {
-        const short = round2(line.qty - line.issued - line.reserved);
-        if (short > 0 && !state.prs.some(x => x.reqId === req.id && x.productId === p.id && x.status === 'open')) {
-          createPR(state, req, p.id, short); waiting.push(req.id);
-        }
-      }
-    }
+    const waiting = ensurePRs(state, p.id, cc.whId);
     S.notify(state, [cc.byUserId], 'warn', T.N73(p.name, cc.reason, waiting));
     return cc;
   };

@@ -15,7 +15,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       rollTotal() { return this.rolls.reduce((a, r) => a + (Number(r.len) || 0), 0); },
     },
     mounted() {
-      this.whId = (this.whs.find(w => w.id === this.defaultWh) || this.whs[0] || {}).id || null;
+      this.whId = this.pr ? this.pr.whId : (this.whs.find(w => w.id === this.defaultWh) || this.whs[0] || {}).id || null;
       if (this.pr && !this.p.isRoll) this.qty = Math.max(0, this.pr.qty - this.pr.received) || null;
       this.$refs.dlg.showModal();
     },
@@ -41,7 +41,8 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     <div class="dlg-body">
       <div class="row" style="align-items:flex-start"><img class="thumb" :src="p.img" alt="" @error="$noImg">
         <div class="grow"><p><b>{{ p.name }}</b></p><p class="muted small"><span class="mono">{{ p.id }}</span><span v-if="pr"> · ตามรายการต้องซื้อ <span class="mono">{{ pr.id }}</span> (ต้องซื้อ {{ $fmt(pr.qty, p.unit) }} · รับแล้ว {{ $fmt(pr.received, p.unit) }})</span></p></div></div>
-      <div class="field"><label for="rc-wh" class="req">รับเข้าคลัง</label>
+      <p v-if="pr">รับเข้า <b>{{ $wh(pr.whId).name }}</b> <span class="muted small">(คลังของใบเบิกที่รอของนี้)</span></p>
+      <div v-else class="field"><label for="rc-wh" class="req">รับเข้าคลัง</label>
         <select id="rc-wh" class="input" v-model="whId"><option v-for="w in whs" :key="w.id" :value="w.id">{{ w.name }}</option></select></div>
       <div v-if="!p.isRoll" class="field"><label for="rc-qty" class="req">จำนวนที่รับเข้า</label>
         <div class="unitbox"><input id="rc-qty" type="number" inputmode="decimal" step="any" min="0" v-model.number="qty"><span>{{ p.unit }}</span></div></div>
@@ -77,7 +78,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
         const q = this.q.trim().toLowerCase();
         return this.s.products.filter(p => !q || [p.name, p.brand, p.model, p.id].some(v => (v || '').toLowerCase().includes(q)))
           .map(p => ({
-            p, total: S.totalStock(this.s, p.id),
+            p,
             whs: this.s.warehouses.map(w => ({ w, qty: S.available(this.s, p.id, w.id), rolls: this.s.rolls.filter(r => r.productId === p.id && r.whId === w.id).length })).filter(x => x.qty > 0),
           }));
       },
@@ -85,6 +86,8 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     },
     methods: {
       open(productId, prId = null, defaultWh = null) { this.dlg = { productId, prId, defaultWh }; },
+      // ยอดรวม = ผลรวมของแถวคลังที่แสดง (ยอดเบิกได้ หักที่กันไว้แล้ว) ตัวเลขจึงบวกกันลงตัว
+      sumQty(whs) { return Math.round(whs.reduce((a, x) => a + x.qty, 0) * 100) / 100; },
     },
     template: `
 <div class="narrow stack">
@@ -122,7 +125,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     <article v-for="x in stock" :key="x.p.id" class="card stack">
       <div class="row" style="align-items:flex-start"><img class="thumb" :src="x.p.img" alt="" @error="$noImg">
         <div class="grow"><p><b>{{ x.p.name }}</b></p>
-          <p class="small" :class="x.total.qty > 0 ? 't-brand' : 't-bad'"><b>รวมทุกคลัง {{ $fmt(x.total.qty, x.p.unit) }}</b><span v-if="x.total.rolls"> ({{ x.total.rolls }} ม้วน)</span></p></div>
+          <p class="small" :class="x.whs.length ? 't-brand' : 't-bad'"><b>เบิกได้รวมทุกคลัง {{ $fmt(sumQty(x.whs), x.p.unit) }}</b></p></div>
         <button v-if="canReceive" class="btn" @click="open(x.p.id)" :aria-label="'เติมสต็อก ' + x.p.name"><ic n="plus"/>เติม</button></div>
       <dl v-if="x.whs.length" class="whnums">
         <div v-for="y in x.whs" :key="y.w.id" class="kv"><dt>{{ y.w.name }}</dt><dd>{{ $fmt(y.qty, x.p.unit) }}<span v-if="y.rolls" class="muted"> ({{ y.rolls }} ม้วน)</span></dd></div></dl>

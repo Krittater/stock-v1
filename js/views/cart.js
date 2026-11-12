@@ -106,7 +106,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
         clearTimeout(this.dupTimer); this.dupTimer = setTimeout(() => { this.dupId = null; }, 6000);
       },
       remove(i) { this.lines.splice(i, 1); },
-      pickWh(id) { this.cart.whId = id; this.cart.whAuto = false; this.lockMsg = ''; },
+      pickWh(id) { this.cart.whId = id; this.cart.whAuto = false; this.cart.whCleared = false; this.lockMsg = ''; },
       rollsIn(p) { return this.s.rolls.filter(r => r.productId === p.id && r.whId === this.cart.whId).length; },
       shortText(p) {
         const u = p.product.unit, short = this.$fmt(p.short, u);

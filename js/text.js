@@ -7,7 +7,9 @@ SM.fmtQty = (n, unit) => Number(n || 0).toLocaleString('en-US', { maximumFractio
 SM.loadState = function (raw) {
   try {
     const s = JSON.parse(raw);
-    if (s && s.v === 1 && Array.isArray(s.products)) return s;
+    const lists = ['users', 'products', 'warehouses', 'stock', 'rolls', 'jobs', 'reqs', 'prs', 'ccs', 'notifs'];
+    if (s && s.v === 1 && lists.every(k => Array.isArray(s[k])) && s.cart && Array.isArray(s.cart.lines)
+      && s.seq && s.settings && s.users.some(u => u.id === s.currentUserId)) return s;
   } catch (e) { /* ข้อมูลเสีย ใช้ seed */ }
   return SM.seed();
 };

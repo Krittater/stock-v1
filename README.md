@@ -64,7 +64,7 @@ mockup สำหรับนำเสนอลูกค้า กดใช้ง
 ## สำหรับนักพัฒนา
 
 ```
-node --test "tests/*.test.js"      # ทดสอบตรรกะ (js/store.js) 35 ข้อ
+node --test "tests/*.test.js"      # ทดสอบตรรกะ (js/store.js) 44 ข้อ
 python -m http.server 8765          # ถ้าต้องการเปิดผ่าน http://localhost:8765
 ```
 

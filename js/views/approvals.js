@@ -15,7 +15,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     methods: {
       run(fn, okText) {
         try { fn(); SM.toast('ok', okText); this.rejecting = null; this.reason = ''; this.err = ''; }
-        catch (e) { this.err = e.message; }
+        catch (e) { this.err = e.message; if (!this.rejecting) SM.toast('bad', e.message, 5000); }
       },
       startReject(id) { this.rejecting = id; this.reason = ''; this.err = ''; this.$nextTick(() => { const el = document.getElementById('why-' + id); if (el) el.focus(); }); },
       approve(r) { this.run(() => S.approveReq(this.s, r.id, this.user.id, true), `อนุมัติใบเบิก ${r.id} แล้ว ระบบจ่ายของให้ผู้เบิกแล้ว`); },

@@ -4,7 +4,8 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
   const { createApp, reactive, watch } = Vue;
   const KEY = 'stock-mock-v1';
 
-  SM.state = reactive(SM.loadState(localStorage.getItem(KEY)));
+  const stored = () => { try { return localStorage.getItem(KEY); } catch (e) { return null; } };   // storage ถูกบล็อก = เริ่มจาก seed
+  SM.state = reactive(SM.loadState(stored()));
   SM.ui = reactive({ route: { name: 'shop', id: null, query: {} }, q: '', toasts: [], pop: null, dark: document.documentElement.classList.contains('app-dark') });
   SM.views = {};
 
