@@ -328,3 +328,11 @@ dialog.dlg::backdrop { background: rgb(12 16 15 / .55); }
 
 /* เติมสต็อก */
 .whnums { display: grid; gap: 8px 16px; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); margin: 0; padding-top: 12px; border-top: 1px solid var(--line); }
+
+/* เก็บงานตาม constraint: ตัวอักษร ≥ 14px · จุดแตะ ≥ 44px */
+.badge { font-size: 14px; min-width: 22px; height: 22px; }
+.mono { font-size: 1em; }
+.unitbox input { min-height: 44px; }
+.msg a, .card p a { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; font-weight: 500; }
+.userbar select { max-width: 300px; }
+.userbar-in > button { margin-left: auto; }
