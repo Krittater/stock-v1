@@ -268,7 +268,10 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     const prs = [];
     if (state.settings.demoPickFail) {
       state.settings.demoPickFail = false;
-      for (const line of req.lines) line.reserved = Math.min(line.qty, Math.max(0, S.available(state, line.productId, req.whId)));
+      for (const line of req.lines) {
+        line.reserved = Math.min(line.qty, Math.max(0, S.available(state, line.productId, req.whId)));
+        if (line.reserved < line.qty) prs.push(createPR(state, req, line.productId, round2(line.qty - line.reserved)));
+      }
       req.status = 'pick_failed';
       return prs;
     }
@@ -323,7 +326,205 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     return req;
   };
 
-  S._ = { sum, round2, byId, product, T, fmt, ccQty, now, usersWith, docId, dispense, settle, createPR };
+  /* ---------- รับของเข้า · หยิบ · คืนของ ---------- */
+
+  const LOCKED = 'คลังนี้กำลังนับสต็อก ทำรายการไม่ได้ชั่วคราว';
+  const openWh = (state, whId) => {
+    const wh = byId(state.warehouses, whId);
+    if (!wh) throw new Error(T.N14.wh);
+    if (wh.locked) throw new Error(LOCKED);
+    return wh;
+  };
+
+  // ตรวจจำนวนที่จะเข้าคลัง แล้วคืนฟังก์ชันที่ลงยอดจริง (แยกตรวจกับทำ เพื่อไม่ให้ลงยอดครึ่งเดียว)
+  function stockIn(state, p, whId, { qty, rollLengths }, opened = false) {
+    if (p.isRoll) {
+      const lengths = (rollLengths || []).map(Number);
+      if (!lengths.length || lengths.some(n => !(n > 0))) throw new Error(T.N14.rolls);
+      return { amount: round2(sum(lengths, n => n)), text: `${lengths.length} ม้วน ${fmt(sum(lengths, n => n), 'm')}`, apply() {
+        for (const length of lengths)
+          state.rolls.push({ id: docId('R-', state.seq.roll++, 6), productId: p.id, whId, shelf: 'ทั่วไป', length, opened });
+      } };
+    }
+    const err = S.qtyError(p, qty);
+    if (err) throw new Error(err === T.N06() ? T.N14.qty : err);
+    const n = Number(qty);
+    return { amount: n, text: fmt(n, p.unit), apply() {
+      const row = state.stock.find(x => x.productId === p.id && x.whId === whId);
+      if (row) row.qty = round2(row.qty + n); else state.stock.push({ productId: p.id, whId, qty: n, shelf: 'ทั่วไป' });
+    } };
+  }
+
+  // ของเข้าแล้ว: กันให้ใบเบิกที่รออยู่ (เก่าสุดก่อน) ครบทั้งใบเมื่อไรเป็น "ready" และแจ้งผู้เบิก
+  function reserveForWaiting(state, productId, whId) {
+    const readied = [];
+    for (const req of state.reqs) {
+      if (req.whId !== whId || !['waiting', 'partial'].includes(req.status)) continue;
+      let got = false;
+      for (const line of req.lines.filter(l => l.productId === productId)) {
+        const give = Math.min(round2(line.qty - line.issued - line.reserved), Math.max(0, S.available(state, productId, whId)));
+        if (give > 0) { line.reserved = round2(line.reserved + give); got = true; }
+      }
+      if (got && req.lines.every(l => l.issued + l.reserved >= l.qty)) {
+        req.status = 'ready'; readied.push(req);
+        S.notify(state, [req.userId], 'ok', T.N70(req.id), '#/orders/' + req.id);
+      }
+    }
+    return readied;
+  }
+
+  S.receiveStock = function (state, { productId, whId, qty, rollLengths, prId }) {
+    const p = product(state, productId);
+    openWh(state, whId);
+    const incoming = stockIn(state, p, whId, { qty, rollLengths });
+    incoming.apply();
+    // PR ที่ระบุรับยอดทั้งหมด (รับเกินได้) ถ้าไม่ระบุ ไล่ตัดรายการต้องซื้อที่ค้างของสินค้า+คลังนี้
+    let left = incoming.amount;
+    const open = state.prs.filter(x => x.status === 'open' && x.productId === productId && x.whId === whId);
+    for (const pr of prId ? [byId(state.prs, prId)] : open) {
+      if (!pr || left <= 0) continue;
+      const take = prId ? left : Math.min(left, round2(pr.qty - pr.received));
+      pr.received = round2(pr.received + take); left = round2(left - take);
+      if (pr.received >= pr.qty) pr.status = 'done';
+    }
+    return { readied: reserveForWaiting(state, productId, whId), text: incoming.text };
+  };
+
+  S.pickReq = function (state, reqId, userId) {
+    const req = byId(state.reqs, reqId);
+    if (!req || !req.lines.some(l => l.reserved > 0)) throw new Error('ใบเบิกนี้ไม่มีของที่กันไว้ให้จ่าย');
+    openWh(state, req.whId);
+    for (const line of req.lines.filter(l => l.reserved > 0)) {
+      const give = line.reserved;
+      line.reserved = 0;                       // ปล่อยที่กันไว้ก่อน ไม่งั้นยอดเบิกได้จะไม่นับของก้อนนี้
+      dispense(state, req, line, S.planLine(state, { ...line, qty: give }, req.whId));
+    }
+    settle(req);
+    if (userId !== req.userId) S.notify(state, [req.userId], 'info', T.N69(req.id, req.status === 'issued'), '#/orders/' + req.id);
+    return req;
+  };
+
+  S.returnItems = function (state, { reqId, lines }) {
+    const req = byId(state.reqs, reqId);
+    if (!req) throw new Error('ไม่พบใบเบิก');
+    openWh(state, req.whId);
+    const todo = lines.filter(l => l.qty !== null && l.qty !== '' && l.qty !== undefined).map(l => {
+      const line = req.lines.find(x => x.productId === l.productId);
+      const p = product(state, l.productId);
+      const max = round2(line.issued - line.returned);
+      const err = S.qtyError(p, l.qty);
+      const e = err ? new Error(err) : Number(l.qty) > max ? new Error(`คืนได้ไม่เกิน ${fmt(max, p.unit)}`) : null;
+      if (e) { e.productId = p.id; throw e; }
+      return { line, p, incoming: stockIn(state, p, req.whId, { qty: l.qty, rollLengths: [l.qty] }, true) };
+    });
+    if (!todo.length) throw new Error('ใส่จำนวนที่จะคืนอย่างน้อย 1 รายการ');
+    for (const { line, p, incoming } of todo) {
+      incoming.apply();
+      line.returned = round2(line.returned + incoming.amount);
+      reserveForWaiting(state, p.id, req.whId);
+    }
+    return req;
+  };
+
+  S.lowStock = (state) => state.products
+    .map(p => ({ product: p, total: S.totalStock(state, p.id).qty, reorderPoint: p.reorderPoint }))
+    .filter(x => x.reorderPoint > 0 && x.total < x.reorderPoint);
+
+  /* ---------- สร้างสินค้า/งานใหม่ · ยืนยันยอดตั้งต้น ---------- */
+
+  const norm = (s) => (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  // ponytail: ความคล้ายแบบ Dice บน bigram พอสำหรับเตือนชื่อคล้าย ถ้าต้องแม่นกว่านี้ค่อยเปลี่ยนเป็น trigram/ตัดคำไทย
+  function similarity(a, b) {
+    const grams = (s) => { const t = norm(s).replace(/ /g, ''); const g = []; for (let i = 0; i < t.length - 1; i++) g.push(t.slice(i, i + 2)); return g; };
+    const A = grams(a), B = grams(b);
+    if (!A.length || !B.length) return 0;
+    const pool = B.slice(); let hit = 0;
+    for (const g of A) { const i = pool.indexOf(g); if (i >= 0) { hit++; pool.splice(i, 1); } }
+    return (2 * hit) / (A.length + B.length);
+  }
+
+  S.similarProducts = function (state, name) {
+    if (!norm(name)) return [];
+    return state.products
+      .map(p => ({ product: p, exact: norm(p.name) === norm(name), pct: Math.round(similarity(p.name, name) * 100) }))
+      .filter(x => x.exact || x.pct >= 60)
+      .sort((a, b) => b.exact - a.exact || b.pct - a.pct);
+  };
+
+  S.createProduct = function (state, input, userId) {
+    const name = (input.name || '').trim();
+    if (!name) throw new Error('กรุณาระบุชื่อสินค้า');
+    const dup = S.similarProducts(state, name).find(x => x.exact);
+    if (dup) throw new Error(T.N11(dup.product));
+    const unit = input.isRoll ? 'm' : (input.unit || '').trim();
+    if (!unit) throw new Error(T.N19());
+    const draft = { name, brand: (input.brand || '').trim(), model: (input.model || '').trim(), unit, isRoll: !!input.isRoll };
+    const type = S.cableFacets(draft).type;
+    const p = {
+      id: '', ...draft, category: (input.category || '').trim() || (type ? (type.startsWith('CAT') ? 'สายสื่อสาร' : 'สายไฟ') : 'อื่น ๆ'),
+      img: 'img/products/placeholder.svg', reorderPoint: 0, scrapMin: draft.isRoll ? 3 : 0,
+    };
+    let incoming = null;
+    if (input.opening) { openWh(state, input.opening.whId); incoming = stockIn(state, p, input.opening.whId, input.opening); }
+
+    p.id = docId('P-', state.seq.product++, 4);
+    state.products.push(p);
+    if (!incoming) return { product: p, cc: null, toast: T.N20(p) };
+    if (byId(state.users, userId).role !== 'engineer') {     // Store/หัวหน้า คุมตัวเลขสต็อกได้ ลงยอดทันที
+      incoming.apply();
+      return { product: p, cc: null, toast: T.N21(p, incoming.text) };
+    }
+    const cc = {
+      id: docId('CC-', state.seq.cc++, 4), productId: p.id, whId: input.opening.whId, byUserId: userId, status: 'pending', reason: '',
+      qty: p.isRoll ? null : Number(input.opening.qty), rollLengths: p.isRoll ? input.opening.rollLengths.map(Number) : null, text: incoming.text,
+    };
+    state.ccs.push(cc);
+    S.notify(state, usersWith(state, 'store', 'head'), 'info',
+      T.N71(cc.id, p.name, incoming.text, byId(state.warehouses, cc.whId).name), '#/approvals');
+    return { product: p, cc, toast: T.N22(p, incoming.text, cc.id) };
+  };
+
+  S.confirmCC = function (state, ccId, userId, ok, reason = '') {
+    const cc = byId(state.ccs, ccId);
+    if (!cc || cc.status !== 'pending') throw new Error('รายการนี้ไม่ได้รอยืนยันยอด');
+    const p = product(state, cc.productId);
+    if (ok) {
+      openWh(state, cc.whId);
+      const incoming = stockIn(state, p, cc.whId, cc);
+      incoming.apply(); cc.status = 'ok';
+      S.notify(state, [cc.byUserId], 'ok', T.N72(p.name, incoming.text));
+      reserveForWaiting(state, p.id, cc.whId);
+      return cc;
+    }
+    if (!reason.trim()) throw new Error('กรุณาระบุเหตุผล');
+    cc.status = 'rejected'; cc.reason = reason.trim();
+    // ponytail: คำถามเปิดข้อ 2 ยังไม่ตัดสิน — ทำตามคำแนะนำ BA: สร้างรายการต้องซื้อให้ใบเบิกที่รอยอดนี้อยู่
+    const waiting = [];
+    for (const req of state.reqs.filter(r => r.whId === cc.whId && ['waiting', 'partial'].includes(r.status))) {
+      for (const line of req.lines.filter(l => l.productId === p.id)) {
+        const short = round2(line.qty - line.issued - line.reserved);
+        if (short > 0 && !state.prs.some(x => x.reqId === req.id && x.productId === p.id && x.status === 'open')) {
+          createPR(state, req, p.id, short); waiting.push(req.id);
+        }
+      }
+    }
+    S.notify(state, [cc.byUserId], 'warn', T.N73(p.name, cc.reason, waiting));
+    return cc;
+  };
+
+  S.similarJobs = function (state, name) {
+    const n = norm(name);
+    if (!n) return [];
+    return state.jobs.filter(j => j.open && (similarity(j.name, n) >= 0.6 || (n.length >= 4 && norm(j.name).includes(n))));
+  };
+
+  S.createJob = function (state, { name, customer }) {
+    const n = (name || '').trim();
+    if (!n) throw new Error('กรุณาระบุชื่องาน');
+    const job = { id: 'J-26-' + String(state.seq.job++).padStart(3, '0'), name: n, customer: (customer || '').trim(), open: true };
+    state.jobs.push(job);
+    return job;
+  };
 })();
 
 if (typeof module !== 'undefined') module.exports = SM;
