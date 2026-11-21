@@ -25,6 +25,8 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       if (!['ok', 'damaged', 'reject'].includes(condition)) throw new Error('เลือกสภาพของที่รับ');
       const pr = l.prId ? byId(state.prs, l.prId) : null;
       if (l.prId && !pr) throw new Error('ไม่พบรายการต้องซื้อ');
+      if (pr && pr.status === 'cancelled') throw new Error(`รายการต้องซื้อ ${pr.id} ถูกยกเลิกแล้ว รับเป็นของที่ไม่มีใบขอซื้อแทน`);
+      if (pr && pr.status === 'done') throw new Error(`รายการต้องซื้อ ${pr.id} รับครบแล้ว รับเป็นของที่ไม่มีใบขอซื้อแทน`);
       if (pr && pr.whId !== wh.id) throw new Error(`รายการต้องซื้อ ${pr.id} ต้องรับเข้า${byId(state.warehouses, pr.whId).name}`);
       if (pr && pr.productId !== p.id) throw new Error(`รายการต้องซื้อ ${pr.id} ไม่ใช่สินค้า ${p.name}`);
 
@@ -68,7 +70,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
         let pr = it.pr;
         if (!pr) { pr = createPR(state, null, it.p.id, it.qty, { whId: wh.id }); prId = pr.id; }
         pr.received = round2(pr.received + it.qty);
-        pr.status = pr.received >= pr.qty ? 'done' : 'open';
+        if (pr.status === 'open' && pr.received >= pr.qty) pr.status = 'done';
       }
       for (const id of it.rollIds) rolls.push(byId(state.rolls, id));
       receipt.lines.push({ productId: it.p.id, prId, qty: it.qty, shelf: it.at, condition: it.condition, rollIds: it.rollIds });

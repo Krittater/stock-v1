@@ -93,3 +93,23 @@ test('สินค้าเลิกใช้ + PR คนละคลัง', ()
   s.products.find(x => x.id === 'P-0004').active = false;
   assert.throws(() => rc(s, [{ productId: 'P-0004', qty: 1 }]), /เลิกใช้แล้ว รับของเข้าไม่ได้/);
 });
+test('PR ที่ยกเลิก/รับครบแล้ว → รับไม่ได้ ไม่เปลี่ยนสถานะ', () => {
+  const { s, pr } = withPR();
+  pr.status = 'cancelled';
+  assert.throws(() => rc(s, [{ productId: 'P-0007', prId: pr.id, qty: 1 }]), new RegExp(`${pr.id} ถูกยกเลิกแล้ว`));
+  assert.deepEqual([pr.status, pr.received, s.receipts.length], ['cancelled', 0, 0]);
+  pr.status = 'done';
+  assert.throws(() => rc(s, [{ productId: 'P-0007', prId: pr.id, qty: 1 }]), /รับครบแล้ว/);
+  assert.deepEqual([pr.status, pr.received, s.receipts.length], ['done', 0, 0]);
+});
+test('ม้วนที่มีแต่ 0 ข้างบรรทัดดี → throw ทั้งใบ ไม่บันทึกอะไร', () => {
+  const s = SM.seed(); const snap = () => JSON.stringify([s.stock, s.rolls, s.receipts, s.prs, s.seq]); const before = snap();
+  assert.throws(() => rc(s, [{ productId: 'P-0004', qty: 5 }, { productId: 'P-0017', rollLengths: [0] }]), /มากกว่า 0/);
+  assert.equal(snap(), before);
+});
+test('ไม่ระบุ prId: PR เปิดเดิมของสินค้า+คลังเดียวกันไม่ถูกแตะ และได้ noPr done เพิ่ม', () => {
+  const { s, pr } = withPR(); const n = s.prs.length;
+  rc(s, [{ productId: 'P-0007', qty: 5 }]);
+  assert.deepEqual([pr.status, pr.received], ['open', 0]);
+  assert.deepEqual([s.prs.length, s.prs.at(-1).noPr, s.prs.at(-1).status], [n + 1, true, 'done']);
+});
