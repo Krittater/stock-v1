@@ -60,6 +60,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       S.notify(state, [cc.byUserId], 'warn', T.N73(p.name, cc.reason, waiting, stage === 'head'));
       return cc;
     }
+    if (!p || p.active === false) throw new Error('ไม่พบสินค้า');   // ปฏิเสธได้เสมอ แต่ลงยอดให้สินค้าที่เลิกใช้แล้วไม่ได้
     if (stage === 'store' && p.needsApproval && me !== 'head') {   // Store ผ่านแล้ว รอหัวหน้าต่อ
       plan(state, p, cc.whId, cc.shelf, cc);                      // ตรวจก่อนส่งต่อ
       cc.stage = 'head';
@@ -167,6 +168,10 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       return { p, whId: r.whId, inc: plan(state, p, r.whId, r.shelf, { rollLengths: [r.qty], rollIds: [r.rollNo], initials: [r.rollInitial], batch: r.batch || undefined }) };
     });
     jobs.forEach(j => j.inc.apply());
+    for (const r of rows) {   // เลขม้วนจากไฟล์ที่เป็นรูป R-… ต้องไม่ชนกับเลขที่ระบบออกให้ต่อไป
+      const m = /^R-0*(\d+)$/i.exec(r.rollNo || '');
+      if (m && Number(m[1]) >= state.seq.roll) state.seq.roll = Number(m[1]) + 1;
+    }
     for (const k of new Set(jobs.map(j => j.p.id + '|' + j.whId))) reserveForWaiting(state, ...k.split('|'));
     S.log(state, userId, 'opening-import', 'import', `นำเข้ายอดยกมา ${rows.length} แถว`);
     return { count: rows.length };

@@ -103,7 +103,7 @@ test('OS-G2/G3 found: Store เข้าทันที · เลือกชั
   const f = S.submitOpening(s, { productId: 'P-0004', whId: 'wh-main', shelf: 'A-02', qty: 4, kind: 'found' }, 'u-store');
   assert.equal(f.cc, null);
   assert.deepEqual([qty(s, 'P-0004'), s.stock.find(x => x.productId === 'P-0004' && x.shelf === 'A-02').qty], [before + 4, 4]);
-  assert.throws(() => S.submitOpening(s, { productId: 'P-0004', whId: 'wh-main', shelf: 'QC', qty: 1 }, 'u-store'), /ชั้น/);
+  assert.throws(() => S.submitOpening(s, { productId: 'P-0004', whId: 'wh-main', shelf: 'QC', qty: 1 }, 'u-store'), /ชั้น QC เป็นชั้นรอตรวจ/);
   const e = S.submitOpening(s, { productId: 'P-0004', whId: 'wh-main', qty: 2, kind: 'found' }, 'u-eng');
   assert.deepEqual([e.cc.kind, e.cc.stage, e.cc.shelf], ['found', 'store', 'ทั่วไป']);
 });
@@ -159,4 +159,24 @@ test('importOpening: head เท่านั้น · แถวผิดไม�
   assert.deepEqual([roll.productId, roll.shelf, roll.length, roll.batch, roll.initial], ['P-0008', 'A-02', 100, 'L7', 120]);
   assert.equal(s.audit.length, n + 1);
   assert.match(s.audit.at(-1).text, /2 แถว/);
+});
+
+test('นำเข้าเลขม้วน R-000050 → เลขที่ระบบออกต่อไม่ชน', () => {
+  const s = SM.seed(); s.seq.roll = 40;
+  const rows = S.parseOpeningCsv(s, [HEAD, 'P-0008,wh-main,A-02,100,R-000050,,'].join('\n')).rows;
+  S.importOpening(s, rows, 'u-head');
+  assert.equal(s.seq.roll, 51);
+  S.receive(s, { whId: 'wh-main', lines: [{ productId: 'P-0008', rollLengths: [30], overReason: 'x' }] }, 'u-store');
+  const ids = s.rolls.map(r => r.id);
+  assert.equal(new Set(ids).size, ids.length);
+  assert.ok(ids.includes('R-000051'));
+});
+
+test('ยืนยันหลังเลิกใช้สินค้า → ลงยอดไม่ได้ แต่ปฏิเสธได้', () => {
+  const s = SM.seed(); const r = mk(s, 'u-eng');
+  s.products.find(p => p.id === r.product.id).active = false;
+  assert.throws(() => S.confirmCC(s, r.cc.id, 'u-store', true), /ไม่พบสินค้า/);
+  assert.deepEqual([r.cc.stage, qty(s, r.product.id)], ['store', 0]);
+  S.confirmCC(s, r.cc.id, 'u-store', false, 'เลิกใช้แล้ว');
+  assert.equal(r.cc.stage, 'rejected');
 });
