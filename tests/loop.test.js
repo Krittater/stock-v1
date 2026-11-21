@@ -1,5 +1,5 @@
 const test = require('node:test'); const assert = require('node:assert');
-require('../js/seed.js'); require('../js/text.js'); const SM = require('../js/store.js'); require('../js/domain/returns.js'); require('../js/domain/products.js'); require('../js/domain/jobs.js');
+require('../js/seed.js'); require('../js/text.js'); const SM = require('../js/store.js'); require('../js/domain/returns.js'); require('../js/domain/receiving.js'); require('../js/domain/products.js'); require('../js/domain/jobs.js');
 const S = SM.store;
 const fill = (s, lines) => Object.assign(s.cart, { lines, whId: 'wh-main', jobId: 'J-25-010', note: '' });
 const texts = (s, uid) => s.notifs.filter(n => n.toUserId === uid).map(n => n.text);
@@ -7,7 +7,7 @@ const texts = (s, uid) => s.notifs.filter(n => n.toUserId === uid).map(n => n.te
 test('ลูปเต็ม: ขาด → ต้องซื้อ → รับของเข้า → กันของ → หยิบ → ครบ', () => {
   const s = SM.seed(); fill(s, [{ productId: 'P-0007', qty: 85 }]);
   const { req, prs } = S.issueNow(s, 'u-eng');                           // จ่าย 54 ขาด 31
-  const { readied } = S.receiveStock(s, { productId: 'P-0007', whId: 'wh-main', qty: 40, prId: prs[0].id, userId: 'u-store' });
+  const { readied } = S.receiveStock(s, { productId: 'P-0007', whId: 'wh-main', qty: 40, prId: prs[0].id, overReason: 'ของแถม', userId: 'u-store' });
   assert.deepEqual(readied.map(r => r.id), [req.id]);
   assert.deepEqual([req.status, req.lines[0].reserved], ['ready', 31]);
   assert.equal(S.available(s, 'P-0007', 'wh-main'), 9);                  // 40 - 31 ที่กันไว้ (รับเกิน PR ได้)

@@ -261,9 +261,12 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     req.status = req.lines.every(l => l.issued >= l.qty) ? 'issued' : req.lines.some(l => l.issued > 0) ? 'partial' : 'waiting';
   };
 
-  function createPR(state, req, productId, qty) {
-    const pr = { id: docId('PR-', state.seq.pr++, 6), reqId: req.id, productId, whId: req.whId, qty, received: 0, status: 'open', at: now() };
+  // direct = {whId} → PR ของการรับของที่ไม่มีใบ (noPr) ไม่มีใบเบิก ไม่แจ้งใคร
+  function createPR(state, req, productId, qty, direct) {
+    const pr = { id: docId('PR-', state.seq.pr++, 6), reqId: req ? req.id : null, productId, whId: req ? req.whId : direct.whId, qty, received: 0, status: 'open', at: now() };
+    if (direct) pr.noPr = true;
     state.prs.push(pr);
+    if (!req) return pr;
     S.notify(state, usersWith(state, 'store', 'head'), 'info', T.N68(pr.id, req.id), '#/restock');
     return pr;
   }
@@ -381,24 +384,9 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     return readied;
   }
 
-  S.receiveStock = function (state, { productId, whId, qty, rollLengths, prId }) {
-    const p = product(state, productId);
-    const wh = openWh(state, whId);
-    const forPr = prId ? byId(state.prs, prId) : null;
-    if (forPr && forPr.whId !== wh.id) throw new Error(`รายการต้องซื้อ ${forPr.id} ต้องรับเข้า${byId(state.warehouses, forPr.whId).name}`);
-    const incoming = stockIn(state, p, whId, { qty, rollLengths });
-    incoming.apply();
-    // PR ที่ระบุรับยอดทั้งหมด (รับเกินได้) ถ้าไม่ระบุ ไล่ตัดรายการต้องซื้อที่ค้างของสินค้า+คลังนี้
-    let left = incoming.amount;
-    const open = state.prs.filter(x => x.status === 'open' && x.productId === productId && x.whId === whId);
-    for (const pr of prId ? [byId(state.prs, prId)] : open) {
-      if (!pr || left <= 0) continue;
-      const take = prId ? left : Math.min(left, round2(pr.qty - pr.received));
-      pr.received = round2(pr.received + take); left = round2(left - take);
-      if (pr.received >= pr.qty) pr.status = 'done';
-    }
-    return { readied: reserveForWaiting(state, productId, whId), text: incoming.text };
-  };
+  // ตัวเดิมของหน้า restock/test เก่า — ตัวจริงอยู่ js/domain/receiving.js
+  S.receiveStock = (state, { productId, whId, qty, rollLengths, prId, userId, overReason }) =>
+    S.receive(state, { whId, overReason, lines: [{ productId, prId, qty, rollLengths }] }, userId);
 
   S.pickReq = function (state, reqId, userId) {
     const req = byId(state.reqs, reqId);

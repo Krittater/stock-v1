@@ -1,6 +1,6 @@
 // กรณีที่ผู้ตรวจอิสระพบ (final review): แต่ละข้อคือบั๊กที่เคยเกิดจริง
 const test = require('node:test'); const assert = require('node:assert');
-require('../js/seed.js'); require('../js/text.js'); const SM = require('../js/store.js'); require('../js/domain/products.js');
+require('../js/seed.js'); require('../js/text.js'); const SM = require('../js/store.js'); require('../js/domain/products.js'); require('../js/domain/receiving.js');
 const S = SM.store;
 const fill = (s, lines, whId = 'wh-main') => Object.assign(s.cart, { lines, whId, jobId: 'J-25-010', note: '' });
 const rollSum = (s, pid, wh) => s.rolls.filter(r => r.productId === pid && r.whId === wh).reduce((a, r) => a + r.length, 0);
@@ -8,7 +8,7 @@ const rollSum = (s, pid, wh) => s.rolls.filter(r => r.productId === pid && r.whI
 test('C1: เส้นเดียวที่ไม่มีม้วนยาวพอ ตอนหยิบ → ไม่จ่าย ของที่กันไว้ยังอยู่ สต็อกไม่เพี้ยน', () => {
   const s = SM.seed(); fill(s, [{ productId: 'P-0017', qty: 80, single: true }]);
   const { req, prs } = S.issueNow(s, 'u-eng');                           // ไม่มีของ → รอ
-  S.receiveStock(s, { productId: 'P-0017', whId: 'wh-main', rollLengths: [50, 50], prId: prs[0].id });
+  S.receiveStock(s, { productId: 'P-0017', whId: 'wh-main', rollLengths: [50, 50], prId: prs[0].id, overReason: 'รับเกินเพื่อทดสอบ' });
   assert.throws(() => S.pickReq(s, req.id, 'u-store'), /ไม่มีม้วนไหนยาว 80 m/);
   assert.deepEqual([req.lines[0].issued, req.lines[0].reserved, rollSum(s, 'P-0017', 'wh-main')], [0, 80, 100]);
 });
@@ -35,7 +35,7 @@ test('C1: อนุมัติสายเส้นเดียวที่ไ�
 test('C2: เส้นเดียวต้องไม่ตัดของที่กันไว้ให้ใบอื่น (ยอดเบิกได้ห้ามติดลบ)', () => {
   const s = SM.seed(); fill(s, [{ productId: 'P-0012', qty: 160 }]);
   const a = S.issueNow(s, 'u-eng');                                      // จ่าย 100 ขาด 60
-  S.receiveStock(s, { productId: 'P-0012', whId: 'wh-main', rollLengths: [100], prId: a.prs[0].id }); // กัน 60 เหลือเบิกได้ 40
+  S.receiveStock(s, { productId: 'P-0012', whId: 'wh-main', rollLengths: [100], prId: a.prs[0].id, overReason: 'รับเกินเพื่อทดสอบ' }); // กัน 60 เหลือเบิกได้ 40
   fill(s, [{ productId: 'P-0012', qty: 80, single: true }]);
   const plan = S.planLine(s, s.cart.lines[0], 'wh-main');
   assert.deepEqual([plan.have, plan.cuts.length, plan.short], [40, 0, 80]);
