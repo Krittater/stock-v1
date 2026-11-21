@@ -163,3 +163,15 @@ test('เลิกใช้ไม่ได้เมื่อมีของแ�
   s.rolls.push({ id: 'R-999998', productId: p.id, whId: 'wh-main', shelf: 'ทั่วไป', length: 50 });
   assert.throws(() => S.setProductActive(s, p.id, false, 'u-head'), /เลิกใช้ไม่ได้ ยังมีของ 50/);
 });
+
+test('replacePhoto: วิศวกรทำไม่ได้ · Store เปลี่ยนที่เดิม · log ครั้งเดียว', () => {
+  const s = SM.seed();
+  S.addPhoto(s, 'P-0004', 'a', 'u-store'); S.addPhoto(s, 'P-0004', 'b', 'u-store');
+  const n = s.audit.length;
+  assert.throws(() => S.replacePhoto(s, 'P-0004', 0, 'x', 'u-eng'), /เปลี่ยนรูปได้เฉพาะคลังสินค้าและหัวหน้า/);
+  assert.throws(() => S.replacePhoto(s, 'P-0004', 5, 'x', 'u-store'), /ไม่พบรูป/);
+  assert.equal(s.audit.length, n);
+  S.replacePhoto(s, 'P-0004', 0, 'x', 'u-store');
+  assert.deepEqual(P(s, 'P-0004').photos, ['x', 'b']);
+  assert.equal(s.audit.length, n + 1);
+});

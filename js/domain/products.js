@@ -162,6 +162,16 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     return p;
   };
 
+  S.replacePhoto = function (state, id, index, dataUrl, userId) {
+    const p = byId(state.products, id);
+    if (!p) throw new Error('ไม่พบสินค้า');
+    if (role(state, userId) === 'engineer') throw new Error('เปลี่ยนรูปได้เฉพาะคลังสินค้าและหัวหน้า');
+    if (!(index >= 0 && index < p.photos.length)) throw new Error('ไม่พบรูปที่จะเปลี่ยน');
+    p.photos[index] = dataUrl;
+    S.log(state, userId, 'product-photo', id, `เปลี่ยนรูปสินค้า ${p.name} (รูปที่ ${index + 1})`);
+    return p;
+  };
+
   S.removePhoto = function (state, id, index, userId) {
     const p = byId(state.products, id);
     if (!p) throw new Error('ไม่พบสินค้า');

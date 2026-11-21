@@ -249,10 +249,8 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
         this.busy = true; this.err = '';
         try {
           const d = await SM.shrinkImage(f), uid = this.user.id;
-          if (this.mode === 'replace') {   // เปลี่ยน = ลบแล้วเพิ่ม (คืนลำดับเดิมให้รูปหลักไม่ย้ายที่)
-            S.removePhoto(this.s, this.p.id, this.sel, uid); S.addPhoto(this.s, this.p.id, d, uid);
-            this.photos.splice(this.sel, 0, this.photos.pop());
-          } else { S.addPhoto(this.s, this.p.id, d, uid); this.sel = this.photos.length - 1; }
+          if (this.mode === 'replace') S.replacePhoto(this.s, this.p.id, this.sel, d, uid);
+          else { S.addPhoto(this.s, this.p.id, d, uid); this.sel = this.photos.length - 1; }
         } catch (x) { this.err = x.message; }
         this.busy = false;
       },
