@@ -76,7 +76,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       low() { return S.lowStock(this.s); },
       stock() {
         const q = this.q.trim().toLowerCase();
-        return this.s.products.filter(p => !q || [p.name, p.brand, p.model, p.id].some(v => (v || '').toLowerCase().includes(q)))
+        return this.s.products.filter(p => p.active !== false && (!q || [p.name, p.brand, p.model, p.id].some(v => (v || '').toLowerCase().includes(q))))
           .map(p => ({
             p,
             whs: this.s.warehouses.map(w => ({ w, qty: S.available(this.s, p.id, w.id), rolls: this.s.rolls.filter(r => r.productId === p.id && r.whId === w.id).length })).filter(x => x.qty > 0),

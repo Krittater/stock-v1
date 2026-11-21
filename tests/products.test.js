@@ -121,3 +121,45 @@ test('PD-G4 บาร์โค้ดซ้ำ = throw (เฉพาะสิน�
   S.setProductActive(s, 'P-0020', false, 'u-head');
   assert.doesNotThrow(() => S.updateProduct(s, b.id, { vendorCode: '8851234567890' }, 'u-store'));
 });
+
+test('เลิกใช้แล้วไม่อยู่ใน lowStock', () => {
+  const s = SM.seed();
+  const p = mk(s, { reorderPoint: 5 }).product;
+  assert.ok(S.lowStock(s).some(x => x.product.id === p.id));
+  S.setProductActive(s, p.id, false, 'u-head');
+  assert.ok(!S.lowStock(s).some(x => x.product.id === p.id));
+});
+
+test('เปิดใช้อีกครั้ง: บาร์โค้ดซ้ำกับตัวที่ active = throw', () => {
+  const s = SM.seed();
+  const a = mk(s, { vendorCode: '999' }).product;
+  S.setProductActive(s, a.id, false, 'u-head');
+  mk(s, { name: 'Z2', vendorCode: '999' });
+  assert.throws(() => S.setProductActive(s, a.id, true, 'u-head'), /บาร์โค้ดนี้เป็นของ P-0021 Z2/);
+  assert.equal(a.active, false);
+});
+
+test('Store ส่ง name กับ category = FORBIDDEN และชื่อไม่เปลี่ยน', () => {
+  const s = SM.seed();
+  assert.throws(() => S.updateProduct(s, 'P-0004', { name: 'ok', category: 'x' }, 'u-store'), new RegExp(T.FORBIDDEN));
+  assert.equal(P(s, 'P-0004').name, 'เบรกเกอร์ลูกย่อย 1P 16A');
+});
+
+test('hasHistory: ยอดศูนย์แต่มีม้วน/ใบเบิก/CC/PR อย่างเดียวก็นับ', () => {
+  const s = SM.seed();
+  const fresh = (n) => mk(s, { name: n }).product.id;
+  assert.equal(S.hasHistory(s, fresh('H0')), false);
+  const r = fresh('H-roll'), q = fresh('H-req'), c = fresh('H-cc'), pr = fresh('H-pr');
+  s.rolls.push({ id: 'R-999999', productId: r, whId: 'wh-main', shelf: 'ทั่วไป', length: 0 });
+  s.reqs.push({ id: 'REQ-X', userId: 'u-eng', whId: 'wh-main', jobId: 'J-25-010', lines: [{ productId: q, qty: 1, issued: 0, reserved: 0, returned: 0, cuts: [] }] });
+  s.ccs.push({ id: 'CC-X', productId: c, whId: 'wh-main', status: 'pending' });
+  s.prs.push({ id: 'PR-X', productId: pr, whId: 'wh-main', status: 'open' });
+  for (const id of [r, q, c, pr]) assert.equal(S.hasHistory(s, id), true, id);
+});
+
+test('เลิกใช้ไม่ได้เมื่อมีของแค่ม้วนเดียว', () => {
+  const s = SM.seed();
+  const p = mk(s, { name: 'Roll1', isRoll: true }).product;
+  s.rolls.push({ id: 'R-999998', productId: p.id, whId: 'wh-main', shelf: 'ทั่วไป', length: 50 });
+  assert.throws(() => S.setProductActive(s, p.id, false, 'u-head'), /เลิกใช้ไม่ได้ ยังมีของ 50/);
+});

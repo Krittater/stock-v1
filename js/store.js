@@ -417,7 +417,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     return req;
   };
 
-  S.lowStock = (state) => state.products
+  S.lowStock = (state) => state.products.filter(p => p.active !== false)
     .map(p => ({ product: p, total: S.totalStock(state, p.id).qty, reorderPoint: p.reorderPoint }))
     .filter(x => x.reorderPoint > 0 && x.total < x.reorderPoint);
 

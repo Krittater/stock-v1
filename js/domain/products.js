@@ -135,6 +135,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     const left = heldQty(state, id);
     if (!active && left > 0) throw new Error(`เลิกใช้ไม่ได้ ยังมีของ ${fmt(left, p.unit)}`);   // Q6
     if ((p.active !== false) === !!active) return p;
+    if (active) checkBarcode(state, p.vendorCode, id);   // ระหว่างเลิกใช้ อาจมีตัวอื่นใช้บาร์โค้ดนี้ไปแล้ว
     p.active = !!active;
     S.log(state, userId, 'product-active', id, active ? `เปิดใช้สินค้า ${p.name}` : `เลิกใช้สินค้า ${p.name}`);
     return p;
