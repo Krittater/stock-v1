@@ -4,10 +4,12 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
 (function () {
   const S = SM.store = {};
   const T = SM.T;
+  const QC = (x) => x.shelf === 'QC';   // ของชั้นรอตรวจ ยังไม่นับเป็นยอดเบิกได้
   const sum = (arr, f) => arr.reduce((a, x) => a + f(x), 0);
   const round2 = (n) => Math.round(n * 100) / 100;
   const byId = (list, id) => list.find(x => x.id === id);
   const product = (state, id) => byId(state.products, id);
+  const byId2 = byId;
 
   /* ---------- สินค้า: ค้นหา + ชิปสเปก ---------- */
 
@@ -32,9 +34,9 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
   S.isCableLike = (p) => !!p.isRoll && p.unit === 'm';
 
   S.totalStock = (state, productId) => ({
-    qty: round2(sum(state.stock.filter(x => x.productId === productId), x => x.qty)
-      + sum(state.rolls.filter(r => r.productId === productId), r => r.length)),
-    rolls: state.rolls.filter(r => r.productId === productId).length,
+    qty: round2(sum(state.stock.filter(x => x.productId === productId && !QC(x)), x => x.qty)
+      + sum(state.rolls.filter(r => r.productId === productId && !QC(r)), r => r.length)),
+    rolls: state.rolls.filter(r => r.productId === productId && !QC(r)).length,
   });
 
   S.categories = (state) => [...new Set(state.products.map(p => p.category))];
@@ -95,8 +97,8 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
 
   // ยอดที่เบิกได้จริง = ของในคลัง − ที่กันไว้ให้ใบเบิกอื่น
   S.available = function (state, productId, whId) {
-    const inWh = sum(state.stock.filter(x => x.productId === productId && x.whId === whId), x => x.qty)
-      + sum(state.rolls.filter(r => r.productId === productId && r.whId === whId), r => r.length);
+    const inWh = sum(state.stock.filter(x => x.productId === productId && x.whId === whId && !QC(x)), x => x.qty)
+      + sum(state.rolls.filter(r => r.productId === productId && r.whId === whId && !QC(r)), r => r.length);
     const reserved = sum(state.reqs.filter(r => r.whId === whId),
       r => sum(r.lines.filter(l => l.productId === productId), l => l.reserved || 0));
     return round2(inWh - reserved);
@@ -130,7 +132,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     if (wh.locked) return fail(T.N37(p.name), `${p.name} · คลังนี้กำลังตรวจนับ`);
 
     if (p.isRoll) {
-      const rolls = state.rolls.filter(r => r.productId === p.id && r.whId === whId && r.length > 0);
+      const rolls = state.rolls.filter(r => r.productId === p.id && r.whId === whId && r.length > 0 && !QC(r));
       const cut = (r, len) => ({ rollId: r.id, shelf: r.shelf, had: r.length, cut: round2(len), left: round2(r.length - len) });
       if (line.single && rolls.length) {
         // เส้นเดียว = ม้วนที่ยาวพอและเหลือน้อยสุด
@@ -341,21 +343,23 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
   };
 
   // ตรวจจำนวนที่จะเข้าคลัง แล้วคืนฟังก์ชันที่ลงยอดจริง (แยกตรวจกับทำ เพื่อไม่ให้ลงยอดครึ่งเดียว)
-  function stockIn(state, p, whId, { qty, rollLengths }, opened = false) {
+  function stockIn(state, p, whId, { qty, rollLengths, shelf = 'ทั่วไป', batch, fromRollId }, opened = false) {
+    const sh = (byId2(state.warehouses, whId)?.shelves || []).find(x => x.code === shelf);
+    if (!sh || !sh.active) throw new Error(`ที่วาง ${shelf} ปิดใช้งานอยู่ (เปิดใช้อีกครั้งก่อน)`);
     if (p.isRoll) {
       const lengths = (rollLengths || []).map(Number);
       if (!lengths.length || lengths.some(n => !(n > 0))) throw new Error(T.N14.rolls);
       return { amount: round2(sum(lengths, n => n)), text: `${lengths.length} ม้วน ${fmt(sum(lengths, n => n), 'm')}`, apply() {
         for (const length of lengths)
-          state.rolls.push({ id: docId('R-', state.seq.roll++, 6), productId: p.id, whId, shelf: 'ทั่วไป', length, opened });
+          state.rolls.push({ id: docId('R-', state.seq.roll++, 6), productId: p.id, whId, shelf, length, opened, batch, fromRollId });
       } };
     }
     const err = S.qtyError(p, qty);
     if (err) throw new Error(err === T.N06() ? T.N14.qty : err);
     const n = Number(qty);
     return { amount: n, text: fmt(n, p.unit), apply() {
-      const row = state.stock.find(x => x.productId === p.id && x.whId === whId);
-      if (row) row.qty = round2(row.qty + n); else state.stock.push({ productId: p.id, whId, qty: n, shelf: 'ทั่วไป' });
+      const row = state.stock.find(x => x.productId === p.id && x.whId === whId && x.shelf === shelf);
+      if (row) row.qty = round2(row.qty + n); else state.stock.push({ productId: p.id, whId, qty: n, shelf });
     } };
   }
 
@@ -541,6 +545,30 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     state.jobs.push(job);
     return job;
   };
+  /* ---------- ชั้นวาง · ชั้นรอตรวจ · ประวัติ ---------- */
+
+  S.shelves = (state, whId, { qc = false } = {}) =>
+    (byId(state.warehouses, whId)?.shelves || []).filter(s => s.active && (qc || !s.qc)).map(s => s.code);
+  S.qcShelf = (state, whId) => (byId(state.warehouses, whId)?.shelves || []).find(s => s.qc).code;
+  S.qcStock = (state, whId) => [
+    ...state.stock.filter(x => QC(x) && (!whId || x.whId === whId)).map(x => ({ productId: x.productId, whId: x.whId, qty: x.qty })),
+    ...state.rolls.filter(r => QC(r) && (!whId || r.whId === whId)).map(r => ({ productId: r.productId, whId: r.whId, qty: r.length, rollId: r.id })),
+  ];
+  S.log = (state, userId, action, ref, text) => { state.audit.push({ at: now(), userId, action, ref, text }); };
+  S.auditFor = (state, ref) => state.audit.filter(e => e.ref === ref);
+
+  S._ = { stockIn, openWh, reserveForWaiting, createPR, ensurePRs, now, docId, usersWith, round2, similarity, norm };
 })();
+
+// state ใน localStorage เสีย/เวอร์ชันเก่า → กลับไปใช้ seed (ไม่ให้จอขาว)
+SM.loadState = function (raw) {
+  try {
+    const s = JSON.parse(raw);
+    const lists = ['users', 'products', 'warehouses', 'stock', 'rolls', 'jobs', 'reqs', 'prs', 'ccs', 'notifs', 'audit', 'returns', 'receipts'];
+    if (s && s.v === 2 && lists.every(k => Array.isArray(s[k])) && s.cart && Array.isArray(s.cart.lines)
+      && s.seq && s.settings && s.users.some(u => u.id === s.currentUserId)) return s;
+  } catch (e) { /* ข้อมูลเสีย ใช้ seed */ }
+  return SM.seed();
+};
 
 if (typeof module !== 'undefined') module.exports = SM;

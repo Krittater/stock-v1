@@ -1,5 +1,5 @@
 const test = require('node:test'); const assert = require('node:assert');
-require('../js/seed.js'); const SM = require('../js/text.js');
+require('../js/seed.js'); const SM = require('../js/text.js'); require('../js/store.js');
 
 test('seed ตรงกับสเปก 0.5', () => {
   const s = SM.seed();

@@ -3,15 +3,18 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
 // ข้อมูลตัวอย่างตามสเปกหัวข้อ 0.5 (ยอดรวมทุกคลังต้องตรงสเปก — tests/seed.test.js ตรวจ)
 SM.seed = function () {
   const P = (id, name, brand, model, unit, isRoll, category, img, reorderPoint = 0) =>
-    ({ id, name, brand, model, unit, isRoll, category, img: 'img/products/' + img, reorderPoint, scrapMin: isRoll ? 3 : 0 });
+    ({ id, name, brand, model, unit, isRoll, category, img: 'img/products/' + img, reorderPoint, scrapMin: isRoll ? 3 : 0,
+      active: true, needsApproval: id === 'P-0008', vendorCode: '', note: '', buyUnit: unit, buyFactor: 1, photos: [] });
+  const SH = (c01Off) => ['ทั่วไป', 'A-01', 'A-02', 'A-03', 'B-01', 'B-02', 'B-03', 'C-01', 'QC']
+    .map(code => ({ code, active: !(c01Off && code === 'C-01'), ...(code === 'QC' ? { qc: true } : {}) }));
   const R = (n, productId, whId, length, shelf = 'A-01') =>
     ({ id: 'R-' + String(n).padStart(6, '0'), productId, whId, shelf, length, opened: false });
   const K = (productId, whId, qty, shelf = 'ทั่วไป') => ({ productId, whId, qty, shelf });
 
   return {
-    v: 1,
+    v: 2,
     currentUserId: 'u-eng',
-    settings: { reqApproval: false, demoPickFail: false },
+    settings: { reqApproval: false, demoPickFail: false, openingLocked: false },
     users: [
       { id: 'u-eng', name: 'สมชาย ใจดี', role: 'engineer' },
       { id: 'u-store', name: 'ก้องภพ แสงทอง', role: 'store' },
@@ -32,10 +35,10 @@ SM.seed = function () {
       P('P-0006', 'เทปพันสายไฟ 3M', '3M', 'Temflex 1700 กว้าง 3/4 นิ้ว ยาว 10 ม.', 'ม้วน', false, 'วัสดุสิ้นเปลือง', 'electrical-tape.svg'),
     ],
     warehouses: [
-      { id: 'wh-main', name: 'คลังหลัก', site: 'บางนา กรุงเทพฯ', locked: false },
-      { id: 'wh-a', name: 'คลังไซต์งาน A', site: 'มาบตาพุด ระยอง', locked: false },
-      { id: 'wh-b', name: 'คลังไซต์งาน B', site: 'อมตะซิตี้ ชลบุรี', locked: false },
-      { id: 'wh-c', name: 'คลังไซต์งาน C', site: 'กำลังนับสต็อก', locked: true },
+      { id: 'wh-main', name: 'คลังหลัก', site: 'บางนา กรุงเทพฯ', locked: false, shelves: SH(0) },
+      { id: 'wh-a', name: 'คลังไซต์งาน A', site: 'มาบตาพุด ระยอง', locked: false, shelves: SH(0) },
+      { id: 'wh-b', name: 'คลังไซต์งาน B', site: 'อมตะซิตี้ ชลบุรี', locked: false, shelves: SH(1) },
+      { id: 'wh-c', name: 'คลังไซต์งาน C', site: 'กำลังนับสต็อก', locked: true, shelves: SH(0) },
     ],
     stock: [
       K('P-0004', 'wh-main', 30, 'B-02'),
@@ -55,11 +58,11 @@ SM.seed = function () {
       R(160, 'P-0011', 'wh-main', 100),
     ],
     jobs: [
-      { id: 'J-25-010', name: 'ไซต์งาน A เฟส 2', customer: 'บจก. มาบตาพุด เคมิคอล', open: true },
-      { id: 'J-25-002', name: 'ซ่อมบำรุงประจำปี', customer: 'ภายในบริษัท', open: true },
-      { id: 'J-24-045', name: 'เดินสาย LAN โรงงาน B', customer: 'บจก. อมตะ พาร์ทส์', open: true },
-      { id: 'J-24-012', name: 'ติดตั้งตู้ MDB อาคารสำนักงานใหญ่', customer: 'บจก. สยามพร็อพเพอร์ตี้', open: true },
-      { id: 'J-24-031', name: 'ติดตั้งระบบไฟฟ้า อาคาร A โครงการริเวอร์ไซด์', customer: 'บจก. ริเวอร์ไซด์ ดีเวลลอปเมนท์', open: true },
+      { id: 'J-25-010', name: 'ไซต์งาน A เฟส 2', customer: 'บจก. มาบตาพุด เคมิคอล', open: true, ownerId: 'u-eng', site: '', start: '2026-11-01', due: null, closedAt: null, note: '' },
+      { id: 'J-25-002', name: 'ซ่อมบำรุงประจำปี', customer: 'ภายในบริษัท', open: true, ownerId: 'u-eng', site: '', start: '2026-11-01', due: null, closedAt: null, note: '' },
+      { id: 'J-24-045', name: 'เดินสาย LAN โรงงาน B', customer: 'บจก. อมตะ พาร์ทส์', open: true, ownerId: 'u-eng', site: '', start: '2026-11-01', due: null, closedAt: null, note: '' },
+      { id: 'J-24-012', name: 'ติดตั้งตู้ MDB อาคารสำนักงานใหญ่', customer: 'บจก. สยามพร็อพเพอร์ตี้', open: true, ownerId: 'u-eng', site: '', start: '2026-11-01', due: null, closedAt: null, note: '' },
+      { id: 'J-24-031', name: 'ติดตั้งระบบไฟฟ้า อาคาร A โครงการริเวอร์ไซด์', customer: 'บจก. ริเวอร์ไซด์ ดีเวลลอปเมนท์', open: true, ownerId: 'u-eng', site: '', start: '2026-11-01', due: null, closedAt: null, note: '' },
     ],
     cart: { lines: [], whId: null, whAuto: false, whCleared: false, jobId: null, note: '' },
     reqs: [{
@@ -69,10 +72,14 @@ SM.seed = function () {
         { productId: 'P-0009', qty: 2, issued: 2, reserved: 0, returned: 0, single: false, cuts: [] },
       ],
     }],
+    approvalCats: [],
+    audit: [],
+    returns: [],
+    receipts: [],
     prs: [],
     ccs: [],
     notifs: [],
-    seq: { req: 690007, pr: 690002, cc: 7, roll: 161, product: 20, job: 11 },
+    seq: { req: 690007, pr: 690002, cc: 7, roll: 161, product: 20, job: 11, ret: 1, rc: 690001 },
   };
 };
 

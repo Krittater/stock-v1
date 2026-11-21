@@ -2,7 +2,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
 
 (function () {
   const { createApp, reactive, watch } = Vue;
-  const KEY = 'stock-mock-v1';
+  const KEY = 'stock-shop-v2';
 
   const stored = () => { try { return localStorage.getItem(KEY); } catch (e) { return null; } };   // storage ถูกบล็อก = เริ่มจาก seed
   SM.state = reactive(SM.loadState(stored()));
