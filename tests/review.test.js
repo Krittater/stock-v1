@@ -1,6 +1,6 @@
 // กรณีที่ผู้ตรวจอิสระพบ (final review): แต่ละข้อคือบั๊กที่เคยเกิดจริง
 const test = require('node:test'); const assert = require('node:assert');
-require('../js/seed.js'); require('../js/text.js'); const SM = require('../js/store.js');
+require('../js/seed.js'); require('../js/text.js'); const SM = require('../js/store.js'); require('../js/domain/products.js');
 const S = SM.store;
 const fill = (s, lines, whId = 'wh-main') => Object.assign(s.cart, { lines, whId, jobId: 'J-25-010', note: '' });
 const rollSum = (s, pid, wh) => s.rolls.filter(r => r.productId === pid && r.whId === wh).reduce((a, r) => a + r.length, 0);
@@ -80,7 +80,7 @@ test('I5: คลังถูกล็อกแล้วล้าง → ไม�
 
 test('I6: สองใบรอยอดตั้งต้นก้อนเดียว → ใบที่ไม่ได้ของต้องมีรายการต้องซื้อ', () => {
   const s = SM.seed();
-  const { product, cc } = S.createProduct(s, { name: 'ข้อต่อ EMT 1 นิ้ว', unit: 'ตัว', opening: { whId: 'wh-main', qty: 10 } }, 'u-eng');
+  const { product, cc } = S.createProduct(s, { name: 'ข้อต่อ EMT 1 นิ้ว', category: 'อื่น ๆ', unit: 'ตัว', opening: { whId: 'wh-main', qty: 10 } }, 'u-eng');
   fill(s, [{ productId: product.id, qty: 10 }]); const a = S.issueNow(s, 'u-eng');
   fill(s, [{ productId: product.id, qty: 10 }]); const b = S.issueNow(s, 'u-eng');
   S.confirmCC(s, cc.id, 'u-store', true);

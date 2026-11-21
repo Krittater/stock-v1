@@ -57,7 +57,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
         try {
           const opening = this.hasStock
             ? { whId: this.whId, qty: this.qty, rollLengths: this.rolls.map(r => r.len) } : null;
-          const r = S.createProduct(this.s, { name: this.name, brand: this.brand, model: this.model, unit: this.unit, isRoll: this.isRoll, opening }, this.user.id);
+          const r = S.createProduct(this.s, { name: this.name, brand: this.brand, model: this.model, unit: this.unit, isRoll: this.isRoll, category: S.categoryNames(this.s)[0], opening }, this.user.id);
           SM.toast('ok', r.toast, 5000);
           SM.addToCart(r.product.id);
           SM.ui.q = '';

@@ -39,12 +39,12 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     rolls: state.rolls.filter(r => r.productId === productId && !QC(r)).length,
   });
 
-  S.categories = (state) => [...new Set(state.products.map(p => p.category))];
+  S.categories = (state) => [...new Set(state.products.filter(p => p.active !== false).map(p => p.category))];
 
   function matchBase(state, { q, category }) {
     const needle = (q || '').trim().toLowerCase();
     return state.products.filter(p =>
-      (!category || p.category === category) &&
+      p.active !== false && (!category || p.category === category) &&
       (!needle || [p.name, p.brand, p.model, p.id].some(v => (v || '').toLowerCase().includes(needle))));
   }
   const matchFacets = (p, facets, except) => {
@@ -434,46 +434,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     return (2 * hit) / (A.length + B.length);
   }
 
-  S.similarProducts = function (state, name) {
-    if (!norm(name)) return [];
-    return state.products
-      .map(p => ({ product: p, exact: norm(p.name) === norm(name), pct: Math.round(similarity(p.name, name) * 100) }))
-      .filter(x => x.exact || x.pct >= 60)
-      .sort((a, b) => b.exact - a.exact || b.pct - a.pct);
-  };
-
-  S.createProduct = function (state, input, userId) {
-    const name = (input.name || '').trim();
-    if (!name) throw new Error('กรุณาระบุชื่อสินค้า');
-    const dup = S.similarProducts(state, name).find(x => x.exact);
-    if (dup) throw new Error(T.N11(dup.product));
-    const unit = input.isRoll ? 'm' : (input.unit || '').trim();
-    if (!unit) throw new Error(T.N19());
-    const draft = { name, brand: (input.brand || '').trim(), model: (input.model || '').trim(), unit, isRoll: !!input.isRoll };
-    const type = S.cableFacets(draft).type;
-    const p = {
-      id: '', ...draft, category: (input.category || '').trim() || (type ? (type.startsWith('CAT') ? 'สายสื่อสาร' : 'สายไฟ') : 'อื่น ๆ'),
-      img: 'img/products/placeholder.svg', reorderPoint: 0, scrapMin: draft.isRoll ? 3 : 0,
-    };
-    let incoming = null;
-    if (input.opening) { openWh(state, input.opening.whId); incoming = stockIn(state, p, input.opening.whId, input.opening); }
-
-    p.id = docId('P-', state.seq.product++, 4);
-    state.products.push(p);
-    if (!incoming) return { product: p, cc: null, toast: T.N20(p) };
-    if (byId(state.users, userId).role !== 'engineer') {     // Store/หัวหน้า คุมตัวเลขสต็อกได้ ลงยอดทันที
-      incoming.apply();
-      return { product: p, cc: null, toast: T.N21(p, incoming.text) };
-    }
-    const cc = {
-      id: docId('CC-', state.seq.cc++, 4), productId: p.id, whId: input.opening.whId, byUserId: userId, status: 'pending', reason: '',
-      qty: p.isRoll ? null : Number(input.opening.qty), rollLengths: p.isRoll ? input.opening.rollLengths.map(Number) : null, text: incoming.text,
-    };
-    state.ccs.push(cc);
-    S.notify(state, usersWith(state, 'store', 'head'), 'info',
-      T.N71(cc.id, p.name, incoming.text, byId(state.warehouses, cc.whId).name), '#/approvals');
-    return { product: p, cc, toast: T.N22(p, incoming.text, cc.id) };
-  };
+  // S.similarProducts / S.createProduct ย้ายไปอยู่ js/domain/products.js
 
   // ใบเบิกที่ยังขาดของและไม่มีรายการต้องซื้อค้างอยู่ → สร้างให้ คืนเลขใบเบิกที่ได้รายการใหม่
   function ensurePRs(state, productId, whId) {

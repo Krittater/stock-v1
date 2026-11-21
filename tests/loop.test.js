@@ -1,5 +1,5 @@
 const test = require('node:test'); const assert = require('node:assert');
-require('../js/seed.js'); require('../js/text.js'); const SM = require('../js/store.js'); require('../js/domain/returns.js');
+require('../js/seed.js'); require('../js/text.js'); const SM = require('../js/store.js'); require('../js/domain/returns.js'); require('../js/domain/products.js');
 const S = SM.store;
 const fill = (s, lines) => Object.assign(s.cart, { lines, whId: 'wh-main', jobId: 'J-25-010', note: '' });
 const texts = (s, uid) => s.notifs.filter(n => n.toUserId === uid).map(n => n.text);
@@ -62,26 +62,26 @@ test('คืนของ: กลับเข้าคลัง ห้ามค�
 test('สร้างสินค้า: ชื่อซ้ำ/คล้าย, ยอดตั้งต้นตามบทบาท', () => {
   const s = SM.seed();
   assert.equal(S.similarProducts(s, 'เทปพันสายไฟ 3m')[0].exact, true);
-  assert.throws(() => S.createProduct(s, { name: 'เทปพันสายไฟ 3M', unit: 'ม้วน' }, 'u-eng'), /มีสินค้านี้แล้ว: P-0006/);
+  assert.throws(() => S.createProduct(s, { name: 'เทปพันสายไฟ 3M', category: 'อื่น ๆ', unit: 'ม้วน' }, 'u-eng'), /มีสินค้าชื่อนี้แล้ว: P-0006/);
   assert.ok(S.similarProducts(s, 'สายไฟ THW 1.5 sq.mm สีขาว').some(x => !x.exact));
   assert.deepEqual(S.similarProducts(s, 'น็อตสแตนเลส M8'), []);
-  const a = S.createProduct(s, { name: 'น็อตสแตนเลส M8', unit: 'ตัว', opening: { whId: 'wh-main', qty: 200 } }, 'u-store');
+  const a = S.createProduct(s, { name: 'น็อตสแตนเลส M8', category: 'อื่น ๆ', unit: 'ตัว', opening: { whId: 'wh-main', qty: 200 } }, 'u-store');
   assert.deepEqual([a.product.id, a.cc, S.available(s, 'P-0020', 'wh-main')], ['P-0020', null, 200]);
   assert.equal(a.toast, 'สร้าง P-0020 แล้ว · ลงยอด 200 ตัว เข้าคลังแล้ว');
-  const b = S.createProduct(s, { name: 'สายไฟ THW 1x4 sq.mm สีแดง', unit: 'ตัว', isRoll: true,
+  const b = S.createProduct(s, { name: 'สายไฟ THW 1x4 sq.mm สีแดง', category: 'สายไฟ', unit: 'ตัว', isRoll: true,
     opening: { whId: 'wh-main', rollLengths: [100, 100, 100] } }, 'u-eng');
   assert.deepEqual([b.product.unit, b.cc.id, b.cc.status, S.available(s, b.product.id, 'wh-main')], ['m', 'CC-0007', 'pending', 0]);
   assert.equal(S.cableFacets(b.product).color, 'แดง');
   assert.equal(b.product.category, 'สายไฟ');
   assert.ok(texts(s, 'u-store').some(t => /CC-0007/.test(t)));
-  const c = S.createProduct(s, { name: 'ปลั๊กพ่วง 3 เมตร', unit: 'ตัว' }, 'u-eng');
+  const c = S.createProduct(s, { name: 'ปลั๊กพ่วง 3 เมตร', category: 'อื่น ๆ', unit: 'ตัว' }, 'u-eng');
   assert.deepEqual([c.cc, c.product.category], [null, 'อื่น ๆ']);
-  assert.throws(() => S.createProduct(s, { name: 'ของไม่มีหน่วย', unit: ' ' }, 'u-eng'), /กรุณาเลือกหน่วย/);
+  assert.throws(() => S.createProduct(s, { name: 'ของไม่มีหน่วย', category: 'อื่น ๆ', unit: ' ' }, 'u-eng'), /กรุณาเลือกหน่วย/);
 });
 
 test('ใบเบิกรอยอดที่ Store ยังไม่ยืนยัน → ยืนยันแล้วได้ของ', () => {
   const s = SM.seed();
-  const { product, cc } = S.createProduct(s, { name: 'ข้อต่อ EMT 1/2 นิ้ว', unit: 'ตัว', opening: { whId: 'wh-main', qty: 50 } }, 'u-eng');
+  const { product, cc } = S.createProduct(s, { name: 'ข้อต่อ EMT 1/2 นิ้ว', category: 'อื่น ๆ', unit: 'ตัว', opening: { whId: 'wh-main', qty: 50 } }, 'u-eng');
   fill(s, [{ productId: product.id, qty: 10 }]);
   const { outcome, req, prs } = S.issueNow(s, 'u-eng');
   assert.deepEqual([outcome, prs.length], ['waiting', 0]);               // ไม่สร้าง PR (IP-AC39)
@@ -92,7 +92,7 @@ test('ใบเบิกรอยอดที่ Store ยังไม่ยื�
 
 test('Store ตอบไม่มีของ → สร้าง PR ให้ใบที่รอ', () => {
   const s = SM.seed();
-  const { product, cc } = S.createProduct(s, { name: 'ข้อต่อ EMT 3/4 นิ้ว', unit: 'ตัว', opening: { whId: 'wh-main', qty: 50 } }, 'u-eng');
+  const { product, cc } = S.createProduct(s, { name: 'ข้อต่อ EMT 3/4 นิ้ว', category: 'อื่น ๆ', unit: 'ตัว', opening: { whId: 'wh-main', qty: 50 } }, 'u-eng');
   fill(s, [{ productId: product.id, qty: 10 }]); S.issueNow(s, 'u-eng');
   S.confirmCC(s, cc.id, 'u-store', false, 'หาไม่เจอที่ชั้น');
   assert.deepEqual(s.prs.map(p => [p.productId, p.qty]), [[product.id, 10]]);
