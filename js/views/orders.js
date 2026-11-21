@@ -3,22 +3,21 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
 (function () {
   const S = SM.store, T = SM.T;
   const when = (at) => new Date(at).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
-  const canReturn = (r) => r.lines.some(l => l.issued - l.returned > 0);
 
-  // ใบเบิกที่ผ่านมา (#/orders) · รายละเอียด+หยิบ (#/orders/:id) · คืนของ (#/returns)
+  // ใบเบิกที่ผ่านมา (#/orders) · รายละเอียด+หยิบ (#/orders/:id)
   SM.views.orders = {
     props: { route: Object },
-    data: () => ({ s: SM.state, T, when, scope: 'mine', form: {}, errs: {}, formErr: '' }),
+    data: () => ({ s: SM.state, T, when, scope: 'mine' }),
     computed: {
       user() { return this.s.users.find(u => u.id === this.s.currentUserId); },
       staff() { return this.user.role !== 'engineer'; },
-      mode() { return this.route.name === 'returns' ? 'returns' : this.route.id ? 'detail' : 'list'; },
+      mode() { return this.route.id ? 'detail' : 'list'; },
       visible() {
         const all = this.s.reqs.slice().reverse();
         return this.staff && this.scope === 'all' ? all : all.filter(r => r.userId === this.user.id);
       },
-      req() { return this.s.reqs.find(r => r.id === (this.mode === 'returns' ? this.route.query.req : this.route.id)) || null; },
-      returnable() { return this.visible.filter(canReturn); },
+      req() { return this.s.reqs.find(r => r.id === this.route.id) || null; },
+      canReturn() { return !!this.req && S.returnable(this.s, this.user.id).some(x => x.req.id === this.req.id); },
       prs() { return this.req ? this.s.prs.filter(p => p.reqId === this.req.id) : []; },
       steps() {
         const r = this.req, st = r.status;
@@ -32,25 +31,12 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       },
       canPick() { return this.req && this.req.lines.some(l => l.reserved > 0); },
     },
-    watch: { 'route.query.req'() { this.form = {}; this.errs = {}; this.formErr = ''; } },
     methods: {
-      canReturn,
-      max(l) { return Math.round((l.issued - l.returned) * 100) / 100; },
       pick() {
         try {
           const r = S.pickReq(this.s, this.req.id, this.user.id);
           SM.toast('ok', `จ่ายของตามใบเบิก ${r.id} แล้ว · ${T.status(r.status).label}`);
         } catch (e) { SM.toast('bad', e.message, 5000); }
-      },
-      doReturn() {
-        this.errs = {}; this.formErr = '';
-        const lines = Object.entries(this.form).map(([productId, qty]) => ({ productId, qty }));
-        try {
-          const n = lines.filter(l => l.qty !== null && l.qty !== '').length;
-          S.returnItems(this.s, { reqId: this.req.id, whId: this.req.whId, shelf: 'ทั่วไป', lines: lines.map(l => ({ ...l, condition: 'ok' })) }, this.user.id);
-          SM.toast('ok', `คืนของแล้ว ${n} รายการ เข้า${this.$wh(this.req.whId).name}`);
-          this.form = {};
-        } catch (e) { if (e.productId) this.errs = { [e.productId]: e.message }; else this.formErr = e.message; }
       },
     },
     template: `
@@ -115,45 +101,9 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
             {{ p.status === 'open' ? 'รอของเข้า' : 'ของเข้าแล้ว' }} <a href="#/restock">ดูรายการต้องซื้อ</a></span></p>
         <div class="row res-btns">
           <button v-if="canPick" class="btn primary big" @click="pick"><ic n="check"/>จ่ายของ</button>
-          <a v-if="canReturn(req)" class="btn big" :href="'#/returns?req=' + req.id"><ic n="undo"/>คืนของ</a>
+          <a v-if="canReturn" class="btn big" :href="'#/returns?req=' + req.id"><ic n="undo"/>คืนของ</a>
         </div>
       </section>
-    </template>
-  </template>
-
-  <!-- คืนของ -->
-  <template v-else>
-    <div class="page-head" style="margin:0"><h1 class="grow">คืนของ</h1></div>
-    <template v-if="!req">
-      <p class="muted">เลือกใบเบิกที่จะคืนของกลับเข้าคลัง</p>
-      <div v-if="!returnable.length" class="empty"><ic n="undo"/><p>ยังไม่มีใบเบิกที่คืนของได้</p></div>
-      <a v-for="r in returnable" :key="r.id" class="card ocard" :href="'#/returns?req=' + r.id">
-        <div class="row wrap"><b class="mono grow">{{ r.id }}</b><span class="muted small">{{ when(r.at) }}</span></div>
-        <p>{{ $job(r.jobId).name }}</p>
-        <div class="row"><img v-for="l in r.lines.slice(0, 4)" :key="l.productId" class="thumb sm" :src="$product(l.productId).img" alt="" @error="$noImg">
-          <span class="muted small grow">{{ r.lines.length }} รายการ · {{ $wh(r.whId).name }}</span><ic n="chevron" class="muted"/></div>
-      </a>
-    </template>
-    <template v-else>
-      <a class="link" href="#/returns" style="display:inline-flex;align-items:center">← เลือกใบเบิกอื่น</a>
-      <form class="card stack" @submit.prevent="doReturn" novalidate>
-        <h2>คืนของจากใบเบิก <span class="mono">{{ req.id }}</span></h2>
-        <p class="muted">{{ $job(req.jobId).name }} · คืนเข้า{{ $wh(req.whId).name }}</p>
-        <div v-if="!canReturn(req)" class="msg info"><ic n="info"/><span>ใบเบิกนี้ไม่มีของให้คืนแล้ว</span></div>
-        <div class="clines">
-          <div v-for="l in req.lines.filter(x => max(x) > 0)" :key="l.productId" class="cline">
-            <img class="thumb" :src="$product(l.productId).img" alt="" @error="$noImg">
-            <div class="cname"><p><b>{{ $product(l.productId).name }}</b></p>
-              <p class="muted small">จ่ายไป {{ $fmt(l.issued, $product(l.productId).unit) }} · คืนแล้ว {{ $fmt(l.returned, $product(l.productId).unit) }}</p></div>
-            <div class="cqty"><label :for="'ret-' + l.productId" class="label">คืน</label>
-              <div class="unitbox" :class="{ bad: errs[l.productId] }">
-                <input :id="'ret-' + l.productId" type="number" inputmode="decimal" step="any" min="0" v-model.number="form[l.productId]" :aria-describedby="'re-' + l.productId"><span>{{ $product(l.productId).unit }}</span></div></div>
-            <p v-if="errs[l.productId]" :id="'re-' + l.productId" class="err cmsg" role="alert">{{ errs[l.productId] }}</p>
-          </div>
-        </div>
-        <p v-if="formErr" class="msg bad" role="alert"><ic n="x"/><span>{{ formErr }}</span></p>
-        <button v-if="canReturn(req)" type="submit" class="btn primary big block"><ic n="undo"/>คืนของเข้า{{ $wh(req.whId).name }}</button>
-      </form>
     </template>
   </template>
 </div>`,

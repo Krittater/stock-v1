@@ -57,6 +57,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 7v5l3 2',
     truck: 'M2 6h11v10H2z M13 9h5l3 3v4h-8z M6 19v.01 M17 19v.01',
     scan: 'M4 8V5a1 1 0 0 1 1-1h3 M16 4h3a1 1 0 0 1 1 1v3 M20 16v3a1 1 0 0 1-1 1h-3 M8 20H5a1 1 0 0 1-1-1v-3 M4 12h16',
+    print: 'M6 9V3h12v6 M6 18H4v-7h16v7h-2 M6 14h12v7H6z',
     user: 'M12 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8z M4 21a8 8 0 0 1 16 0',
   };
   const Ic = {
@@ -66,13 +67,13 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
   };
 
   const ROLE = { engineer: 'วิศวกร', store: 'Store', head: 'หัวหน้า' };
-  const TITLES = { shop: 'เบิกของ', cart: 'ตะกร้า', orders: 'ใบเบิกที่ผ่านมา', returns: 'คืนของ', restock: 'เติมสต็อก', approvals: 'อนุมัติ' };
+  const TITLES = { shop: 'เบิกของ', cart: 'ตะกร้า', orders: 'ใบเบิกที่ผ่านมา', returns: 'คืนของ', qc: 'ชั้นรอตรวจ', restock: 'เติมสต็อก', approvals: 'อนุมัติ' };
 
   const Shell = {
     data: () => ({ s: SM.state, ui: SM.ui, ROLE }),
     computed: {
       user() { return this.s.users.find(u => u.id === this.s.currentUserId) || this.s.users[0]; },
-      view() { const n = this.ui.route.name; return SM.views[n === 'returns' ? 'orders' : n] || null; },
+      view() { const n = this.ui.route.name; return SM.views[n] || null; },
       title() { return TITLES[this.ui.route.name] || 'ไม่พบหน้านี้'; },
       notifs() { return this.s.notifs.filter(n => n.toUserId === this.user.id).slice().reverse(); },
       unread() { return this.notifs.filter(n => !n.read).length; },
