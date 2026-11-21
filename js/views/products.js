@@ -7,7 +7,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
   const UNITS = ['เมตร', 'ตัว', 'ชิ้น', 'ใบ', 'กล่อง', 'ถุง', 'อื่น ๆ'];
   const me = () => SM.state.users.find(u => u.id === SM.state.currentUserId);
   const when = (at) => new Date(at).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
-  const cover = (p) => (p.photos && p.photos[0]) || p.img;
+  const cover = (p) => SM.img(p);
 
   // เลือกหมวดเป็นชิป + "+ สร้างหมวดใหม่" (ชื่อซ้ำ = ใช้หมวดเดิม · หมวดใหม่ยังไม่ถูกบันทึกจนกว่าจะสร้าง/บันทึกสินค้า)
   const CatPick = {
@@ -146,7 +146,8 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       alike() { return this.exact ? [] : this.similar.slice(0, 3); },
       unit() { return this.isRoll ? 'm' : this.picked; },
       catApproval() { return this.s.approvalCats.includes(this.category); },
-      route() { return S.openingRoute(this.s, null, this.user.id); },
+      needsAp() { return this.catApproval || (this.isHead && this.needsApproval); },   // เหมือนกฎใน createProduct
+      route() { return S.openingRoute(this.s, null, this.user.id, this.needsAp); },
       missing() {
         const m = [];
         if (!this.name.trim()) m.push('ชื่อสินค้า');
@@ -200,7 +201,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
         <div v-else-if="alike.length" class="msg warn"><ic n="warn"/>
           <div class="grow stack"><span>{{ T.N12() }}</span>
             <div v-for="a in alike" :key="a.product.id" class="row wrap">
-              <img class="thumb sm" :src="a.product.photos[0] || a.product.img" alt="" @error="$noImg">
+              <img class="thumb sm" :src="$img(a.product)" alt="" @error="$noImg">
               <span class="grow">{{ a.product.name }}<br><span class="mono small">{{ a.product.id }} · คล้าย {{ a.pct }}%</span></span>
               <button v-if="fromSearch" type="button" class="btn" @click="use(a.product)">ใช้รายการนี้</button></div></div></div>
       </div>
@@ -225,7 +226,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
         <span><b>ต้องให้หัวหน้าอนุมัติเมื่อยอดเปลี่ยน</b><br><span class="help">{{ catApproval ? 'หมวดนี้ตั้งให้ต้องอนุมัติอยู่แล้ว' : 'ใช้กับการลงยอดตั้งต้นและการปรับยอดจากการนับ' }}</span></span></label>
       <label class="switch"><input type="checkbox" v-model="hasStock"><span><b>มีของนี้อยู่ในคลังแล้ว</b></span></label>
       <div v-if="hasStock" class="card stack open-anim">
-        <open-fields idp="pd" :o="o" :is-roll="isRoll" :unit="unit" :whs="whs" :route="route" :needs-approval="false" :touched="touched"/>
+        <open-fields idp="pd" :o="o" :is-roll="isRoll" :unit="unit" :whs="whs" :route="route" :needs-approval="needsAp" :touched="touched"/>
       </div>
       <details :open="!!initialCode"><summary class="link" style="display:inline-flex;align-items:center">ข้อมูลเพิ่มเติม (ไม่บังคับ)</summary>
         <div class="stack" style="margin-top:8px">

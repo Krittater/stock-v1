@@ -4,6 +4,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
 (function () {
   const T = SM.T;
   const ACTIONS = {
+    issue: 'เบิกของ', 'req-approve': 'อนุมัติใบเบิก', pick: 'หยิบของ',
     return: 'คืนของ', 'return-reverse': 'ย้อนการคืนของ', receive: 'รับของเข้า',
     'qc-restock': 'ตรวจแล้วเก็บเข้าชั้น', 'qc-scrap': 'ตรวจแล้วตัดทิ้ง',
     'product-create': 'สร้างสินค้า', 'product-edit': 'แก้สินค้า', 'product-active': 'เปิด/เลิกใช้สินค้า',

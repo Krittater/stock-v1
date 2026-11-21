@@ -32,7 +32,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
         return this.s.products.filter(p => p.active !== false && (!q || [p.name, p.brand, p.model, p.id].some(v => (v || '').toLowerCase().includes(q))))
           .map(p => ({
             p,
-            whs: this.s.warehouses.map(w => ({ w, qty: S.available(this.s, p.id, w.id), rolls: this.s.rolls.filter(r => r.productId === p.id && r.whId === w.id).length })).filter(x => x.qty > 0),
+            whs: this.s.warehouses.map(w => ({ w, qty: S.available(this.s, p.id, w.id), rolls: S.rollCount(this.s, p.id, w.id) })).filter(x => x.qty > 0),
           }));
       },
       tabs() {
@@ -162,7 +162,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
         });
         try {
           const r = S.receive(this.s, { whId: this.whId, shelf: this.shelf, invoiceNo: this.invoiceNo, vendor: this.vendor, receivedAt: this.receivedAt,
-            note: this.note, overReason: this.overReason, lines }, this.user.id);
+            note: this.note, overReason: this.over.length ? this.overReason : '', lines }, this.user.id);
           this.result = r; this.clearForm(); SM.toast('ok', RC.saved);
           this.$nextTick(() => window.scrollTo(0, 0));
         } catch (e) { this.err = e.message; }
@@ -217,7 +217,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       <div class="whlist" role="group" aria-label="รายการต้องซื้อที่ค้างรับ">
         <label v-for="pr in todo" :key="pr.id" class="whopt" :class="{ sel: isSel(pr), dis: other(pr) }">
           <input type="checkbox" :checked="isSel(pr)" :disabled="other(pr)" @change="togglePr(pr)">
-          <img class="thumb" :src="$product(pr.productId).img" alt="" @error="$noImg">
+          <img class="thumb" :src="$img($product(pr.productId))" alt="" @error="$noImg">
           <span class="grow"><b>{{ $product(pr.productId).name }}</b><br>
             <span class="muted small">สั่ง {{ $fmt(pr.qty, $product(pr.productId).unit) }} · รับแล้ว {{ $fmt(pr.received, $product(pr.productId).unit) }}</span><br>
             <span class="small"><b>ค้างรับ {{ $fmt(out(pr.id), $product(pr.productId).unit) }}</b> · {{ $wh(pr.whId).name }}</span></span>
@@ -232,7 +232,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
             <input id="rc-f" class="input" type="search" v-model="findQ" placeholder="ชื่อ ยี่ห้อ รหัส" autocomplete="off"></div>
           <button class="btn" @click="find = false; findQ = ''">ปิด</button></div>
         <button v-for="p in finds" :key="p.id" class="card ocard reqcard" @click="addLoose(p)">
-          <span class="row"><img class="thumb sm" :src="p.img" alt="" @error="$noImg"><b class="grow">{{ p.name }}</b><ic n="plus" class="muted"/></span></button>
+          <span class="row"><img class="thumb sm" :src="$img(p)" alt="" @error="$noImg"><b class="grow">{{ p.name }}</b><ic n="plus" class="muted"/></span></button>
         <p v-if="findQ.trim() && !finds.length" class="muted">{{ RC.noMatch(findQ.trim()) }}</p>
         <button class="btn block" @click="creating = true"><ic n="plus"/>สินค้าไม่มีรหัส</button>
       </div>
@@ -245,11 +245,11 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       <div class="clines">
         <div v-for="l in lines" :key="l.prId || l.productId" class="rline">
           <div class="row" style="align-items:flex-start">
-            <img class="thumb" :src="$product(l.productId).img" alt="" @error="$noImg">
+            <img class="thumb" :src="$img($product(l.productId))" alt="" @error="$noImg">
             <div class="grow"><p><b>{{ $product(l.productId).name }}</b></p>
               <template v-if="l.prId"><p class="muted small">สั่ง {{ $fmt(prOf(l.prId).qty, $product(l.productId).unit) }} · รับแล้ว {{ $fmt(prOf(l.prId).received, $product(l.productId).unit) }}</p>
                 <p class="small"><b>ค้างรับ {{ $fmt(out(l.prId), $product(l.productId).unit) }}</b></p></template>
-              <p v-else class="muted small">ไม่มีใบขอซื้อ</p></div>
+              <p v-else class="muted small">ไม่มีรายการต้องซื้อ</p></div>
             <button class="btn ghost icon" @click="removeLine(l)" :aria-label="'เอา ' + $product(l.productId).name + ' ออก'"><ic n="x"/></button></div>
 
           <div v-if="!$product(l.productId).isRoll" class="field"><label :for="'rq-' + (l.prId || l.productId)">จำนวนที่รับจริง</label>
@@ -339,6 +339,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
           <b class="mono">{{ r.id }}</b>
           <p class="muted small">{{ when(r.at) }} · {{ $userOf(r.byUserId).name }} · {{ $wh(r.whId).name }}</p>
           <p v-for="(l, i) in r.lines" :key="i" class="small">{{ $product(l.productId).name }} · รับ {{ $fmt(l.qty, $product(l.productId).unit) }} · {{ RC.COND[l.condition] }}</p>
+          <p v-if="r.overReason" class="small">เหตุผลรับเกิน: {{ r.overReason }}</p>
         </div>
       </div>
     </section>
@@ -347,7 +348,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
   <section v-else-if="tab === 'buy'" class="stack" aria-label="รายการต้องซื้อ">
     <div v-if="!prs.length" class="empty"><ic n="check"/><p>ไม่มีรายการต้องซื้อค้างอยู่</p></div>
     <article v-for="pr in prs" :key="pr.id" class="card stack">
-      <div class="row" style="align-items:flex-start"><img class="thumb" :src="$product(pr.productId).img" alt="" @error="$noImg">
+      <div class="row" style="align-items:flex-start"><img class="thumb" :src="$img($product(pr.productId))" alt="" @error="$noImg">
         <div class="grow"><p><b>{{ $product(pr.productId).name }}</b></p>
           <p class="muted small"><template v-if="pr.reqId">ขาดจากใบเบิก <a :href="'#/orders/' + pr.reqId" class="mono">{{ pr.reqId }}</a> · </template>ส่งเข้า{{ $wh(pr.whId).name }}</p></div></div>
       <dl class="nums"><div class="kv"><dt>ต้องซื้อ</dt><dd>{{ $fmt(pr.qty, $product(pr.productId).unit) }}</dd></div>
@@ -359,7 +360,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
   <section v-else-if="tab === 'low'" class="stack" aria-label="ของใกล้หมด">
     <div v-if="!low.length" class="empty"><ic n="check"/><p>ไม่มีของที่ต่ำกว่าเกณฑ์เตือน</p></div>
     <article v-for="x in low" :key="x.product.id" class="card stack">
-      <div class="row" style="align-items:flex-start"><img class="thumb" :src="x.product.img" alt="" @error="$noImg">
+      <div class="row" style="align-items:flex-start"><img class="thumb" :src="$img(x.product)" alt="" @error="$noImg">
         <div class="grow"><p><b>{{ x.product.name }}</b></p><span class="tag warn"><ic n="warn"/>ใกล้หมด</span></div></div>
       <dl class="nums"><div class="kv"><dt>เหลือรวมทุกคลัง</dt><dd>{{ $fmt(x.total, x.product.unit) }}</dd></div>
         <div class="kv"><dt>เกณฑ์เตือน</dt><dd>{{ $fmt(x.reorderPoint, x.product.unit) }}</dd></div></dl>
@@ -370,7 +371,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
   <section v-else class="stack" aria-label="ยอดคงเหลือ">
     <div class="field"><label for="st-q">ค้นหาสินค้า</label><input id="st-q" class="input" type="search" v-model="q" placeholder="ชื่อ ยี่ห้อ รหัส"></div>
     <article v-for="x in stock" :key="x.p.id" class="card stack">
-      <div class="row" style="align-items:flex-start"><img class="thumb" :src="x.p.img" alt="" @error="$noImg">
+      <div class="row" style="align-items:flex-start"><img class="thumb" :src="$img(x.p)" alt="" @error="$noImg">
         <div class="grow"><p><b>{{ x.p.name }}</b></p>
           <p class="small" :class="x.whs.length ? 't-brand' : 't-bad'"><b>เบิกได้รวมทุกคลัง {{ $fmt(sumQty(x.whs), x.p.unit) }}</b></p></div>
         <button v-if="canReceive" class="btn" @click="topup(x.p.id)" :aria-label="'เติมสต็อก ' + x.p.name"><ic n="plus"/>เติม</button></div>

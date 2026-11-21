@@ -76,7 +76,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     S.log(state, userId, 'product-create', p.id, `สร้างสินค้า ${p.name} หมวด ${p.category}`);
     if (!op) return { product: p, cc: null, toast: T.N20(p) };
     try {   // สร้างสินค้าแล้วค่อยส่งยอด ถ้าส่งพัง สินค้ายังอยู่ (5B.5)
-      const r = S.submitOpening(state, { productId: p.id, whId: op.whId, qty: op.qty, rollLengths: op.rollLengths, kind: 'opening' }, userId);
+      const r = S.submitOpening(state, { productId: p.id, whId: op.whId, shelf: op.shelf, qty: op.qty, rollLengths: op.rollLengths, kind: 'opening' }, userId);
       return { product: p, cc: r.cc, toast: `สร้าง ${p.id} แล้ว · ${r.toast}` };
     } catch (e) { return { product: p, cc: null, toast: T.N22x(e.message) }; }
   };
@@ -107,6 +107,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     if ('unit' in next && !next.unit) throw new Error(T.N19());
     if ('buyUnit' in next && !next.buyUnit) next.buyUnit = next.unit || p.unit;
     if ('buyFactor' in next && !(next.buyFactor >= 1)) throw new Error('ตัวเลขไม่ถูกต้อง');
+    if ('category' in next && next.category !== p.category && state.approvalCats.includes(next.category)) next.needsApproval = true;
     for (const k of ['reorderPoint', 'scrapMin']) if (k in next && !(next[k] >= 0)) throw new Error('ตัวเลขไม่ถูกต้อง');
     if ('vendorCode' in next) checkBarcode(state, next.vendorCode, id);
 
@@ -126,6 +127,13 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     if (!p) throw new Error('ไม่พบสินค้า');
     const left = heldQty(state, id);
     if (!active && left > 0) throw new Error(`เลิกใช้ไม่ได้ ยังมีของ ${fmt(left, p.unit)}`);   // Q6
+    if (!active) {
+      if (state.prs.some(x => x.productId === id && x.status === 'open')) throw new Error('เลิกใช้ไม่ได้ ยังมีรายการต้องซื้อค้าง');
+      // ใบเบิกที่ยังรอของ/รออนุมัติ หรือของที่ออกไปกับงานที่ยังเปิดและยังไม่คืน
+      const open = (r) => r.status !== 'rejected' && r.lines.some(l => l.productId === id &&
+        (l.qty - l.issued > 0 || (l.issued - (l.returned || 0) > 0 && byId(state.jobs, r.jobId)?.open)));
+      if (state.reqs.some(open)) throw new Error('เลิกใช้ไม่ได้ ยังมีใบเบิกที่ค้างของนี้อยู่');
+    }
     if ((p.active !== false) === !!active) return p;
     if (active) checkBarcode(state, p.vendorCode, id);   // ระหว่างเลิกใช้ อาจมีตัวอื่นใช้บาร์โค้ดนี้ไปแล้ว
     p.active = !!active;

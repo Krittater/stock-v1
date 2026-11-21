@@ -99,6 +99,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     if (!why) throw new Error('กรุณาระบุว่าของมาจากไหน');
     const p = byId(state.products, productId);
     if (!p) throw new Error('ไม่พบสินค้า');
+    if (p.active === false) throw new Error(`${p.name} เลิกใช้แล้ว`);
     const wh = byId(state.warehouses, whId);
     if (!wh) throw new Error(T.N14.wh);
     if (wh.active === false) throw new Error(`${wh.name} ปิดใช้งานอยู่ — คืนของไม่ได้ (เปิดใช้อีกครั้งก่อน)`);

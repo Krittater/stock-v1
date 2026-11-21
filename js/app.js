@@ -174,6 +174,8 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
 </div>`,
   };
 
+  SM.img = (p) => (p.photos && p.photos[0]) || p.img;   // รูปปกสินค้า: รูปที่อัปโหลดก่อน ไม่มีค่อยใช้รูปเริ่มต้น
+
   SM.boot = () => {
     const app = createApp(Shell);
     app.component('ic', Ic);
@@ -186,6 +188,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       $wh: (id) => SM.state.warehouses.find(w => w.id === id),
       $job: (id) => SM.state.jobs.find(j => j.id === id),
       $userOf: (id) => SM.state.users.find(u => u.id === id),
+      $img: SM.img,
       $noImg: (e) => { e.target.onerror = null; e.target.src = 'img/products/placeholder.svg'; },
     });
     parseRoute();

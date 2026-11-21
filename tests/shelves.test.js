@@ -1,6 +1,5 @@
 const test = require('node:test'); const assert = require('node:assert');
 require('../js/seed.js'); require('../js/text.js'); const SM = require('../js/store.js');
-require('../js/domain/audit.js');
 const S = SM.store;
 
 test('ของชั้นรอตรวจไม่นับเป็นยอดเบิกได้', () => {

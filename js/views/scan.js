@@ -15,6 +15,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     beforeUnmount() { this.stop(); },
     methods: {
       show() {
+        this.stop();   // เปิดซ้ำเร็ว ๆ ต้องไม่ทิ้ง stream เก่าค้าง
         this.open = true; this.code = ''; this.last = null; this.err = ''; this.camErr = '';
         this.$nextTick(() => { this.$refs.dlg.showModal(); this.$refs.inp.focus(); if (this.cam) this.start(); });
       },
@@ -41,7 +42,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
             if (this.stream) this.timer = setTimeout(tick, 300);   // ปิดแล้ว stream เป็น null → หยุด
           };
           tick();
-        } catch (e) { this.camErr = 'เปิดกล้องไม่ได้ พิมพ์รหัสแทนได้'; }
+        } catch (e) { this.stop(); this.camErr = 'เปิดกล้องไม่ได้ พิมพ์รหัสแทนได้'; }
       },
       stop() {
         clearTimeout(this.timer);

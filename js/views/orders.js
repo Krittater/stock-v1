@@ -55,7 +55,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
         <span class="tag" :class="T.status(r.status).tone"><ic :n="T.status(r.status).icon"/>{{ T.status(r.status).label }}</span></div>
       <p>{{ $job(r.jobId).name }}</p>
       <p class="muted small">{{ when(r.at) }} · {{ $userOf(r.userId).name }} · {{ $wh(r.whId).name }}</p>
-      <div class="row"><img v-for="l in r.lines.slice(0, 4)" :key="l.productId" class="thumb sm" :src="$product(l.productId).img" alt="" @error="$noImg">
+      <div class="row"><img v-for="l in r.lines.slice(0, 4)" :key="l.productId" class="thumb sm" :src="$img($product(l.productId))" alt="" @error="$noImg">
         <span class="muted small grow">{{ r.lines.length }} รายการ</span><ic n="chevron" class="muted"/></div>
     </a>
   </template>
@@ -84,7 +84,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
         <h2 id="od-items">รายการ</h2>
         <div class="rows">
           <div v-for="l in req.lines" :key="l.productId" class="row" style="align-items:flex-start">
-            <img class="thumb" :src="$product(l.productId).img" alt="" @error="$noImg">
+            <img class="thumb" :src="$img($product(l.productId))" alt="" @error="$noImg">
             <div class="grow stack" style="gap:6px">
               <p><b>{{ $product(l.productId).name }}</b></p>
               <dl class="nums">

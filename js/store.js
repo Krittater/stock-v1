@@ -85,7 +85,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
   const myReqs = (state, userId) => state.reqs.filter(r => r.userId === userId).slice().reverse();
   S.recentProducts = (state, userId) =>
     [...new Set(myReqs(state, userId).flatMap(r => r.lines.map(l => l.productId)))].slice(0, 4)
-      .map(id => product(state, id)).filter(Boolean);
+      .map(id => product(state, id)).filter(p => p && p.active !== false);
   S.recentJobs = (state, userId) =>
     [...new Set(myReqs(state, userId).map(r => r.jobId))].map(id => byId(state.jobs, id))
       .filter(j => j && j.open).slice(0, 3);
@@ -111,8 +111,12 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     return null;
   };
 
+  // สินค้าเลิกใช้ เบิกไม่ได้ (ตะกร้าเก่าอาจยังมีอยู่)
+  S.lineBlock = (state, l) => { const p = product(state, l.productId); return p && p.active === false ? `${p.name} เลิกใช้แล้ว เบิกไม่ได้` : null; };
   S.linesReady = (state, lines) =>
-    lines.length > 0 && lines.every(l => S.qtyError(product(state, l.productId), l.qty) === null);
+    lines.length > 0 && lines.every(l => S.qtyError(product(state, l.productId), l.qty) === null && !S.lineBlock(state, l));
+  // จำนวนม้วนที่เบิกได้ (ไม่นับชั้นรอตรวจ)
+  S.rollCount = (state, productId, whId) => state.rolls.filter(r => r.productId === productId && (!whId || r.whId === whId) && !QC(r)).length;
 
   const pendingCC = (state, productId, whId) =>
     state.ccs.find(c => (c.stage === 'store' || c.stage === 'head') && c.productId === productId && c.whId === whId) || null;
@@ -296,6 +300,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
 
   S.issueNow = function (state, userId) {
     const cart = state.cart;
+    for (const l of cart.lines) { const m = S.lineBlock(state, l); if (m) throw new Error(m); }
     if (!S.linesReady(state, cart.lines)) throw new Error(T.N56.incomplete);
     const wh = byId(state.warehouses, cart.whId), job = byId(state.jobs, cart.jobId);
     if (!wh) throw new Error(T.N56.noWh);
@@ -316,6 +321,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       S.notify(state, usersWith(state, 'head'), 'info',
         T.N65(req.id, byId(state.users, userId).name, req.lines.length, job.name), '#/approvals');
     } else prs = fulfil(state, req);
+    S.log(state, userId, 'issue', req.id, `เบิก ${req.id} ${req.lines.length} รายการ งาน ${job.id} (${req.status})`);
     cart.lines = []; cart.note = '';        // เก็บคลังและงานไว้ให้ "เบิกต่อ"
     return { outcome: req.status, req, prs };
   };
@@ -323,13 +329,16 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
   S.approveReq = function (state, reqId, approverId, ok, reason = '') {
     const req = byId(state.reqs, reqId);
     if (!req || req.status !== 'pending_approval') throw new Error('ใบเบิกนี้ไม่ได้รออนุมัติ');
+    if (byId(state.users, approverId)?.role !== 'head') throw new Error(T.FORBIDDEN);
     if (ok) {
       if (byId(state.warehouses, req.whId).locked) throw new Error(T.N56.locked);
       fulfil(state, req);
+      S.log(state, approverId, 'req-approve', req.id, `อนุมัติใบเบิก ${req.id} (${req.status})`);
       S.notify(state, [req.userId], 'ok', T.N66(req.id), '#/orders/' + req.id);
     } else {
       if (!reason.trim()) throw new Error('กรุณาระบุเหตุผลที่ไม่อนุมัติ');
       req.status = 'rejected'; req.reason = reason.trim();
+      S.log(state, approverId, 'req-approve', req.id, `ไม่อนุมัติใบเบิก ${req.id}: ${req.reason}`);
       S.notify(state, [req.userId], 'bad', T.N67(req.id, req.reason), '#/orders/' + req.id);
     }
     return req;
@@ -401,6 +410,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       line.reserved = round2(give - (line.issued - was));   // ส่วนที่ยังจ่ายไม่ได้ กันไว้ต่อ
     }
     settle(req);
+    S.log(state, userId, 'pick', req.id, `หยิบของตามใบเบิก ${req.id} (${req.status})`);
     if (userId !== req.userId) S.notify(state, [req.userId], 'info', T.N69(req.id, req.status === 'issued'), '#/orders/' + req.id);
     return req;
   };

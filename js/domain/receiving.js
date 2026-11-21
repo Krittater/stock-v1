@@ -25,8 +25,8 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       if (!['ok', 'damaged', 'reject'].includes(condition)) throw new Error('เลือกสภาพของที่รับ');
       const pr = l.prId ? byId(state.prs, l.prId) : null;
       if (l.prId && !pr) throw new Error('ไม่พบรายการต้องซื้อ');
-      if (pr && pr.status === 'cancelled') throw new Error(`รายการต้องซื้อ ${pr.id} ถูกยกเลิกแล้ว รับเป็นของที่ไม่มีใบขอซื้อแทน`);
-      if (pr && pr.status === 'done') throw new Error(`รายการต้องซื้อ ${pr.id} รับครบแล้ว รับเป็นของที่ไม่มีใบขอซื้อแทน`);
+      if (pr && pr.status === 'cancelled') throw new Error(`รายการต้องซื้อ ${pr.id} ถูกยกเลิกแล้ว รับเป็นของที่ไม่มีรายการต้องซื้อแทน`);
+      if (pr && pr.status === 'done') throw new Error(`รายการต้องซื้อ ${pr.id} รับครบแล้ว รับเป็นของที่ไม่มีรายการต้องซื้อแทน`);
       if (pr && pr.whId !== wh.id) throw new Error(`รายการต้องซื้อ ${pr.id} ต้องรับเข้า${byId(state.warehouses, pr.whId).name}`);
       if (pr && pr.productId !== p.id) throw new Error(`รายการต้องซื้อ ${pr.id} ไม่ใช่สินค้า ${p.name}`);
 
@@ -53,12 +53,15 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     // รับเกินที่สั่ง: รวมทุกบรรทัดที่อ้าง PR เดียวกัน (reject ไม่นับเป็นยอดรับ)
     const per = {};
     for (const it of items) if (it.pr && it.condition !== 'reject') per[it.pr.id] = round2((per[it.pr.id] || 0) + it.qty);
-    const reason = String(overReason || '').trim();
+    const given = String(overReason || '').trim();
+    let isOver = false;
     for (const [id, got] of Object.entries(per)) {
       const excess = round2(got - S.outstanding(state, id));
-      if (excess > 0 && !reason) throw new Error(`รับเกินที่สั่ง ${fmt(excess, byId(state.products, byId(state.prs, id).productId).unit)} ใส่เหตุผล`);
+      if (excess > 0) isOver = true;
+      if (excess > 0 && !given) throw new Error(`รับเกินที่สั่ง ${fmt(excess, byId(state.products, byId(state.prs, id).productId).unit)} ใส่เหตุผล`);
     }
 
+    const reason = isOver ? given : '';
     // ---- ลงยอด ----
     const receipt = { id: docId('RC-', state.seq.rc++, 6), whId: wh.id, byUserId: userId, at: S._.now(), invoiceNo: String(invoiceNo || '').trim(),
       vendor: String(vendor || '').trim(), receivedAt: receivedAt || S._.now().slice(0, 10), note: String(note || '').trim(), overReason: reason, lines: [] };
@@ -79,7 +82,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     const readied = [];
     for (const id of new Set(items.filter(i => i.condition === 'ok').map(i => i.p.id))) readied.push(...reserveForWaiting(state, id, wh.id));
     const text = items.map(i => i.incoming ? i.incoming.text : fmt(i.qty, i.p.unit)).join(', ');
-    S.log(state, userId, 'receive', receipt.id, `รับของเข้า${wh.name} ${receipt.lines.length} รายการ`);
+    S.log(state, userId, 'receive', receipt.id, `รับของเข้า${wh.name} ${receipt.lines.length} รายการ${reason ? ` · เหตุผลรับเกิน: ${reason}` : ''}`);
     return { receipt, readied, rolls, text };
   };
 })();

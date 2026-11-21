@@ -120,7 +120,7 @@ test('parseOpeningCsv: BOM CRLF quote คอลัมน์สลับ บร�
 
 test('parseOpeningCsv: ข้อความผิดตามสเปก 5B.3 + OS-G4', () => {
   const s = SM.seed();
-  s.stock = s.stock.filter(x => x.productId !== 'P-0009'); S.setProductActive(s, 'P-0009', false, 'u-head');
+  s.stock = s.stock.filter(x => x.productId !== 'P-0009'); s.reqs = []; s.prs = []; S.setProductActive(s, 'P-0009', false, 'u-head');
   s.rolls.push({ id: 'R-000777', productId: 'P-0008', whId: 'wh-main', shelf: 'ทั่วไป', length: 5 });
   const csv = [HEAD,
     ',wh-main,ทั่วไป,1,,,', 'P-9999,wh-main,ทั่วไป,1,,,', 'P-0009,wh-main,ทั่วไป,1,,,',

@@ -42,7 +42,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
         <p v-if="r.note" class="muted">หมายเหตุ: {{ r.note }}</p>
         <div class="rows">
           <div v-for="l in r.lines" :key="l.productId" class="row">
-            <img class="thumb sm" :src="$product(l.productId).img" alt="" @error="$noImg">
+            <img class="thumb sm" :src="$img($product(l.productId))" alt="" @error="$noImg">
             <span class="grow">{{ $product(l.productId).name }}</span><b>ขอเบิก {{ $fmt(l.qty, $product(l.productId).unit) }}</b></div>
         </div>
         <div v-if="rejecting === r.id" class="stack">
@@ -59,7 +59,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       <h2 id="ap-cc">ยอดรอยืนยัน ({{ ccs.length }})</h2>
       <article v-for="c in ccs" :key="c.id" class="card stack">
         <div class="row wrap"><b class="mono grow">{{ c.id }}</b><span class="tag info"><ic n="clock"/>{{ c.stage === 'head' ? 'รอหัวหน้าอนุมัติยอด' : 'รอ Store ยืนยันยอด' }}</span></div>
-        <div class="row" style="align-items:flex-start"><img class="thumb" :src="$product(c.productId).img" alt="" @error="$noImg">
+        <div class="row" style="align-items:flex-start"><img class="thumb" :src="$img($product(c.productId))" alt="" @error="$noImg">
           <div class="grow"><p><b>{{ $product(c.productId).name }}</b></p>
             <p><b>{{ c.text }}</b> · {{ $wh(c.whId).name }} · ชั้น {{ c.shelf }}</p>
             <p class="muted">ผู้ส่ง {{ $userOf(c.byUserId).name }}{{ c.kind === 'found' ? ' · ของที่เจอเพิ่ม' : '' }}</p></div></div>

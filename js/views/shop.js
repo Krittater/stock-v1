@@ -45,7 +45,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     <h2 id="recent-h">ใช้บ่อย</h2>
     <div class="quick">
       <button v-for="p in recent" :key="p.id" class="quick-item" @click="add(p)">
-        <img class="thumb sm" :src="p.img" alt="" @error="$noImg">
+        <img class="thumb sm" :src="$img(p)" alt="" @error="$noImg">
         <span class="grow">{{ p.name }}</span><ic :n="inCart.has(p.id) ? 'check' : 'plus'" class="t-brand"/>
       </button>
     </div>
@@ -73,7 +73,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     <div class="pgrid">
       <article v-for="p in results.slice(0, shown)" :key="p.id" class="pcard">
         <div class="pimg">
-          <img :src="p.img" alt="" loading="lazy" @error="$noImg">
+          <img :src="$img(p)" alt="" loading="lazy" @error="$noImg">
           <span v-if="color(p)" class="swatch"><i class="dot" :style="swatch(color(p))"></i>สี{{ color(p) }}</span>
         </div>
         <div class="pbody">

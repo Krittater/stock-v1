@@ -64,7 +64,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       lines() { return this.cart.lines; },
       user() { return this.s.users.find(u => u.id === this.s.currentUserId); },
       ready() { return S.linesReady(this.s, this.lines); },
-      missing() { return this.lines.filter(l => this.qtyErr(l)).map(l => this.$product(l.productId).name); },
+      missing() { return this.lines.filter(l => this.qtyErr(l) && !this.lineBlock(l)).map(l => this.$product(l.productId).name); },
       opts() { return this.ready ? S.warehouseOptions(this.s, this.lines) : []; },
       usable() { return this.opts.filter(o => o.status !== 'locked'); },
       nowhere() { return this.usable.length > 0 && this.usable.every(o => o.status === 'none' && !o.withCC); },
@@ -100,6 +100,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     },
     methods: {
       sync() { const msg = S.syncCartWarehouse(this.s); if (msg) this.lockMsg = msg; },
+      lineBlock(l) { return S.lineBlock(this.s, l); },
       qtyErr(l) { return S.qtyError(this.$product(l.productId), l.qty); },
       flagDup(id) {
         if (!id) return;
@@ -109,7 +110,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       },
       remove(i) { this.lines.splice(i, 1); },
       pickWh(id) { this.cart.whId = id; this.cart.whAuto = false; this.cart.whCleared = false; this.lockMsg = ''; },
-      rollsIn(p) { return this.s.rolls.filter(r => r.productId === p.id && r.whId === this.cart.whId).length; },
+      rollsIn(p) { return S.rollCount(this.s, p.id, this.cart.whId); },
       shortText(p) {
         const u = p.product.unit, short = this.$fmt(p.short, u);
         return p.have > 0 ? T.N40(p.product.name, this.$fmt(p.have, u), short)
@@ -160,7 +161,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     <p v-if="result.outcome === 'pick_failed'" class="msg warn"><ic n="warn"/><span>{{ T.N62a() }}</span></p>
     <div class="rows">
       <div v-for="l in result.req.lines" :key="l.productId" class="row" style="align-items:flex-start">
-        <img class="thumb" :src="resLine(l).p.img" alt="" @error="$noImg">
+        <img class="thumb" :src="$img(resLine(l).p)" alt="" @error="$noImg">
         <div class="grow">
           <p><b>{{ resLine(l).p.name }}</b></p>
           <p>{{ resLine(l).qty }}</p>
@@ -189,7 +190,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       <div class="step-head"><span class="step-no">1</span><h2 id="s1" class="grow req">รายการที่จะเบิก ({{ lines.length }} รายการ)</h2></div>
       <div class="clines">
         <div v-for="(l, i) in lines" :key="l.productId" :id="'line-' + l.productId" class="cline">
-          <img class="thumb" :src="$product(l.productId).img" alt="" @error="$noImg">
+          <img class="thumb" :src="$img($product(l.productId))" alt="" @error="$noImg">
           <div class="cname"><p><b>{{ $product(l.productId).name }}</b></p>
             <p v-if="$product(l.productId).brand || $product(l.productId).model" class="muted small">{{ [$product(l.productId).brand, $product(l.productId).model].filter(Boolean).join(' · ') }}</p></div>
           <div class="cqty">
@@ -201,6 +202,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
           </div>
           <button class="btn ghost icon cdel" @click="remove(i)" :aria-label="'เอา ' + $product(l.productId).name + ' ออก'"><ic n="x"/></button>
           <p :id="'qe-' + l.productId" class="err cmsg" v-if="touched[l.productId] && qtyErr(l)">{{ qtyErr(l) }}</p>
+          <p v-if="lineBlock(l)" class="err cmsg" role="alert">{{ lineBlock(l) }}</p>
           <p v-if="dupId === l.productId" class="msg warn cmsg" role="status"><ic n="warn"/><span>{{ T.N05() }}</span></p>
         </div>
       </div>

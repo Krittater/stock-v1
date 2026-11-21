@@ -215,7 +215,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       <button v-for="x in list.slice(0, shown)" :key="x.req.id" class="card ocard reqcard" @click="select(x.req.id)">
         <span class="row wrap"><b class="mono grow">{{ x.req.id }}</b><span class="muted small">{{ when(x.req.at) }}</span></span>
         <span><b>{{ $job(x.req.jobId).name }}</b></span>
-        <span class="row"><img v-for="l in x.lines.slice(0, 3)" :key="l.productId" class="thumb sm" :src="$product(l.productId).img" alt="" @error="$noImg">
+        <span class="row"><img v-for="l in x.lines.slice(0, 3)" :key="l.productId" class="thumb sm" :src="$img($product(l.productId))" alt="" @error="$noImg">
           <span class="muted small grow">{{ x.lines.length }} รายการ · {{ $wh(x.req.whId).name }}<template v-if="staff"> · เบิกโดย {{ x.by.name }}</template></span><ic n="chevron" class="muted"/></span>
       </button>
       <button v-if="list.length > shown" class="btn block" @click="shown += 8">{{ RT.more(list.length - shown) }}</button>
@@ -261,7 +261,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
         <template v-for="l in sel.lines" :key="l.productId">
           <div v-if="f[l.productId]" class="rline">
             <div class="row" style="align-items:flex-start">
-              <img class="thumb" :src="$product(l.productId).img" alt="" @error="$noImg">
+              <img class="thumb" :src="$img($product(l.productId))" alt="" @error="$noImg">
               <div class="grow"><p><b>{{ $product(l.productId).name }}</b></p>
                 <p class="muted small">จ่ายไป {{ $fmt(l.issued, $product(l.productId).unit) }} · คืนแล้ว {{ $fmt(l.returned, $product(l.productId).unit) }}</p>
                 <p class="small"><b>คืนได้อีก {{ $fmt(l.left, $product(l.productId).unit) }}</b></p></div></div>

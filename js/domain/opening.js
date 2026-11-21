@@ -23,9 +23,10 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
 
   // ใครต้องเป็นคนยืนยันก่อนยอดเข้า: direct = เข้าทันที · store = Store ยืนยันก่อน · head = รอหัวหน้า (UI ใช้ตัวเดียวกัน)
   // productId ว่าง/ยังไม่มีสินค้า (กล่องสร้างสินค้า) = ไม่ต้องอนุมัติ
-  S.openingRoute = function (state, productId, userId) {
+  // needsApproval: ใช้เมื่อยังไม่มีสินค้า (กล่องสร้างสินค้า) ส่งมาเอง
+  S.openingRoute = function (state, productId, userId, needsApproval) {
     const me = role(state, userId), p = byId(state.products, productId);
-    if (me === 'head' || (me === 'store' && !(p && p.needsApproval))) return 'direct';
+    if (me === 'head' || (me === 'store' && !(p ? p.needsApproval : needsApproval))) return 'direct';
     return me === 'store' ? 'head' : 'store';
   };
 
@@ -81,7 +82,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     cc.stage = 'done';
     reserveForWaiting(state, p.id, cc.whId);
     ensurePRs(state, p.id, cc.whId);       // ใบที่ยอดนี้ไม่พอให้ ต้องไปอยู่ในรายการต้องซื้อ
-    S.log(state, userId, 'opening-approve', cc.id, `${stage === 'head' ? 'หัวหน้าอนุมัติ' : 'Store ยืนยัน'}ยอด ${p.name} ${cc.text} (${cc.id}) เข้าคลัง`);
+    S.log(state, userId, stage === 'head' ? 'opening-approve' : 'opening-confirm', cc.id, `${stage === 'head' ? 'หัวหน้าอนุมัติ' : 'Store ยืนยัน'}ยอด ${p.name} ${cc.text} (${cc.id}) เข้าคลัง`);
     S.notify(state, [cc.byUserId], 'ok', T.N72(p.name, cc.text, stage === 'head'));
     return cc;
   };

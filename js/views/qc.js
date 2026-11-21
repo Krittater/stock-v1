@@ -47,7 +47,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       <div class="rows">
         <div v-for="x in g.items" :key="key(x)" class="stack" style="gap:10px">
           <div class="row" style="align-items:flex-start">
-            <img class="thumb" :src="$product(x.productId).img" alt="" @error="$noImg">
+            <img class="thumb" :src="$img($product(x.productId))" alt="" @error="$noImg">
             <div class="grow"><p><b>{{ $product(x.productId).name }}</b></p>
               <p v-if="x.rollId" class="muted small">ม้วน <span class="mono">{{ x.rollId }}</span> · ยาว {{ $fmt(x.qty, unit(x)) }}</p>
               <p v-else class="muted small">รอตรวจ {{ $fmt(x.qty, unit(x)) }}</p></div></div>
