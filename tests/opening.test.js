@@ -103,7 +103,7 @@ test('OS-G2/G3 found: Store เข้าทันที · เลือกชั
   const f = S.submitOpening(s, { productId: 'P-0004', whId: 'wh-main', shelf: 'A-02', qty: 4, kind: 'found' }, 'u-store');
   assert.equal(f.cc, null);
   assert.deepEqual([qty(s, 'P-0004'), s.stock.find(x => x.productId === 'P-0004' && x.shelf === 'A-02').qty], [before + 4, 4]);
-  assert.throws(() => S.submitOpening(s, { productId: 'P-0004', whId: 'wh-main', shelf: 'QC', qty: 1 }, 'u-store'), /ชั้น QC เป็นชั้นรอตรวจ/);
+  assert.throws(() => S.submitOpening(s, { productId: 'P-0004', whId: 'wh-main', shelf: 'QC', qty: 1 }, 'u-store'), /ชั้นรอตรวจ ลงยอดตั้งต้นไม่ได้/);
   const e = S.submitOpening(s, { productId: 'P-0004', whId: 'wh-main', qty: 2, kind: 'found' }, 'u-eng');
   assert.deepEqual([e.cc.kind, e.cc.stage, e.cc.shelf], ['found', 'store', 'ทั่วไป']);
 });
@@ -179,4 +179,16 @@ test('ยืนยันหลังเลิกใช้สินค้า → 
   assert.deepEqual([r.cc.stage, qty(s, r.product.id)], ['store', 0]);
   S.confirmCC(s, r.cc.id, 'u-store', false, 'เลิกใช้แล้ว');
   assert.equal(r.cc.stage, 'rejected');
+});
+
+test('openingRoute: ตรงกับที่ submitOpening ทำจริง', () => {
+  const s = SM.seed();
+  const nA = s.products.find(p => p.needsApproval), nN = s.products.find(p => !p.needsApproval && !p.isRoll);
+  const exp = { 'u-head': ['direct', 'direct'], 'u-store': ['direct', 'head'], 'u-eng': ['store', 'store'] };
+  for (const [u, [n, a]] of Object.entries(exp)) {
+    assert.equal(S.openingRoute(s, nN.id, u), n); assert.equal(S.openingRoute(s, nA.id, u), a);
+    const r = S.submitOpening(s, { productId: nN.id, whId: 'wh-main', qty: 1 }, u);
+    assert.equal(r.cc ? r.cc.stage : 'direct', n);
+  }
+  assert.equal(S.openingRoute(s, null, 'u-store'), 'direct');
 });

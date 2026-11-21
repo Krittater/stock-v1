@@ -67,7 +67,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
   };
 
   const ROLE = { engineer: 'วิศวกร', store: 'Store', head: 'หัวหน้า' };
-  const TITLES = { shop: 'เบิกของ', cart: 'ตะกร้า', orders: 'ใบเบิกที่ผ่านมา', returns: 'คืนของ', qc: 'ชั้นรอตรวจ', restock: 'เติมสต็อก', approvals: 'อนุมัติ', products: 'สินค้า', jobs: 'งาน' };
+  const TITLES = { shop: 'เบิกของ', cart: 'ตะกร้า', orders: 'ใบเบิกที่ผ่านมา', returns: 'คืนของ', qc: 'ชั้นรอตรวจ', restock: 'เติมสต็อก', approvals: 'อนุมัติ', opening: 'ยอดยกมา', products: 'สินค้า', jobs: 'งาน' };
 
   const Shell = {
     data: () => ({ s: SM.state, ui: SM.ui, ROLE }),
@@ -133,6 +133,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       <option v-for="u in s.users" :key="u.id" :value="u.id">{{ u.name }} · {{ ROLE[u.role] }}</option>
     </select>
     <a class="btn ghost" href="#/products" :aria-current="ui.route.name === 'products' ? 'page' : null"><ic n="box"/>สินค้า</a>
+    <a v-if="user.role === 'head'" class="btn ghost" href="#/opening" :aria-current="ui.route.name === 'opening' ? 'page' : null"><ic n="box"/>ยอดยกมา</a>
     <a class="btn ghost" href="#/jobs" :aria-current="ui.route.name === 'jobs' ? 'page' : null"><ic n="list"/>งาน</a>
     <button class="btn ghost icon" @click="setDark(!ui.dark)" :aria-label="ui.dark ? 'เปลี่ยนเป็นโหมดสว่าง' : 'เปลี่ยนเป็นโหมดมืด'"><ic :n="ui.dark ? 'sun' : 'moon'"/></button>
     <div style="position:relative">

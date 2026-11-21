@@ -18,6 +18,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       filtered() { return !!this.category || Object.values(this.facets).some(Boolean); },
       q() { return (this.ui.q || '').trim(); },
       canCreate() { return this.q && !this.s.products.some(p => p.name.trim().toLowerCase() === this.q.toLowerCase()); },
+      waiting() { return S.approvalItems(this.s, this.s.currentUserId).ccs.length; },
       inCart() { return new Set(this.s.cart.lines.map(l => l.productId)); },
     },
     watch: { filter() { this.shown = 8; } },
@@ -37,6 +38,8 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     template: `
 <div class="stack lg">
   <div class="page-head" style="margin:0"><h1 class="grow">เลือกของที่จะเบิก</h1></div>
+
+  <a v-if="waiting" href="#/approvals" class="msg info" style="text-decoration:none"><ic n="clock"/><span class="grow"><b>มียอดรอคุณยืนยัน {{ waiting }} รายการ</b></span><ic n="chevron"/></a>
 
   <section v-if="recent.length && !q && !filtered" aria-labelledby="recent-h" class="stack">
     <h2 id="recent-h">ใช้บ่อย</h2>

@@ -237,7 +237,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
                 <span v-else-if="p.result === 'short'" class="tag warn"><ic n="warn"/>{{ T.N33(p.short, p.product.unit) }}</span>
                 <span v-else class="tag bad"><ic n="x"/>{{ T.N34() }}</span></span>
             </div>
-            <p v-if="p.pendingCC" class="msg info pt-sub"><ic n="clock"/><span>{{ T.N35(p.product.name, p.pendingCC.text, p.pendingCC.id) }}</span></p>
+            <p v-if="p.pendingCC" class="msg info pt-sub"><ic n="clock"/><span>{{ T.N35(p.product.name, p.pendingCC.text, p.pendingCC.id, p.pendingCC.stage) }}</span></p>
           </template>
         </div>
 

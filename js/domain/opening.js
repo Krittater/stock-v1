@@ -17,9 +17,17 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
   function plan(state, p, whId, shelf, data) {
     const wh = openWh(state, whId);
     const sh = wh.shelves.find(x => x.code === shelf);
-    if (sh && sh.qc) throw new Error(`ชั้น ${shelf} เป็นชั้นรอตรวจ ลงยอดตั้งต้นไม่ได้`);
+    if (sh && sh.qc) throw new Error('ชั้นรอตรวจ ลงยอดตั้งต้นไม่ได้');
     return stockIn(state, p, whId, { ...data, shelf });
   }
+
+  // ใครต้องเป็นคนยืนยันก่อนยอดเข้า: direct = เข้าทันที · store = Store ยืนยันก่อน · head = รอหัวหน้า (UI ใช้ตัวเดียวกัน)
+  // productId ว่าง/ยังไม่มีสินค้า (กล่องสร้างสินค้า) = ไม่ต้องอนุมัติ
+  S.openingRoute = function (state, productId, userId) {
+    const me = role(state, userId), p = byId(state.products, productId);
+    if (me === 'head' || (me === 'store' && !(p && p.needsApproval))) return 'direct';
+    return me === 'store' ? 'head' : 'store';
+  };
 
   S.submitOpening = function (state, { productId, whId, shelf = 'ทั่วไป', qty, rollLengths, kind = 'opening' }, userId) {
     const p = byId(state.products, productId);
@@ -29,13 +37,14 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     const me = role(state, userId);
     const label = kind === 'found' ? 'ของที่เจอเพิ่ม' : 'ยอดตั้งต้น';
     // Store/หัวหน้าลงยอดเองได้ · เว้นสินค้าต้องอนุมัติที่ Store ส่ง ต้องรอหัวหน้า (หัวหน้าส่ง = อนุมัติเอง)
-    if (me === 'head' || (me === 'store' && !p.needsApproval)) {
+    const route = S.openingRoute(state, p.id, userId);
+    if (route === 'direct') {
       incoming.apply();
       reserveForWaiting(state, p.id, whId);
       S.log(state, userId, 'opening-in', p.id, `${label} ${p.name} ${incoming.text} ที่${whName(state, whId)} ${shelf}`);
       return { cc: null, toast: T.N21b(incoming.text) };
     }
-    const stage = me === 'store' ? 'head' : 'store';
+    const stage = route;
     const cc = { id: docId('CC-', state.seq.cc++, 4), productId, whId, shelf, ...data, byUserId: userId, stage, reason: '', kind, text: incoming.text };
     state.ccs.push(cc);
     S.log(state, userId, 'opening-submit', cc.id, `ส่ง${label} ${p.name} ${incoming.text} ที่${whName(state, whId)} ${shelf} (${cc.id})`);

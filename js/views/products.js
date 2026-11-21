@@ -76,10 +76,55 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     <div><scan-button :kinds="[]" @found="e => $emit('update:modelValue', e.id)"/></div></div></div>`,
   };
 
+
+  // ---------- ช่องลงยอด (ใช้ทั้งกล่องสร้าง "มีของนี้อยู่ในคลังแล้ว" และแผ่นแก้ "ลงยอดที่เจอเพิ่ม") ----------
+  // o = { whId, shelf, qty, rolls:[{len}] } · เรียง จำนวน → คลัง → ชั้น · ข้อความบอกล่วงหน้าตาม S.openingRoute
+  const newOpen = (whId = null) => ({ whId, shelf: 'ทั่วไป', qty: null, rolls: [{ len: null }] });
+  const openMissing = (o, isRoll, unit) => {
+    const m = [];
+    if (!o.whId) m.push(T.N14.wh);
+    if (isRoll && o.rolls.some(r => !(Number(r.len) > 0))) m.push(T.N14.rolls);
+    const bad = !isRoll && S.qtyError({ unit }, o.qty);
+    if (bad) m.push(bad === T.N06() ? T.N14.qty : bad);
+    return m;
+  };
+  const OpenFields = {
+    props: { o: Object, isRoll: Boolean, unit: String, whs: Array, route: String, needsApproval: Boolean, touched: Boolean, idp: String },
+    data: () => ({ T }),
+    computed: {
+      total() { return this.o.rolls.reduce((a, r) => a + (Number(r.len) || 0), 0); },
+      badQty() { return !this.isRoll && S.qtyError({ unit: this.unit }, this.o.qty); },
+      shelves() { return this.o.whId ? S.shelves(SM.state, this.o.whId) : []; },
+    },
+    watch: { 'o.whId'() { if (!this.shelves.includes(this.o.shelf)) this.o.shelf = this.shelves.includes('ทั่วไป') ? 'ทั่วไป' : (this.shelves[0] || ''); } },
+    template: `
+<div class="stack">
+  <div v-if="!isRoll" class="field"><label :for="idp + '-qty'" class="req">มีอยู่เท่าไร</label>
+    <div class="unitbox" :class="{ bad: touched && badQty }"><input :id="idp + '-qty'" type="number" inputmode="decimal" step="any" min="0" v-model.number="o.qty"><span>{{ unit || 'หน่วย' }}</span></div></div>
+  <div v-else class="stack">
+    <span class="label req">ม้วนละกี่เมตร</span>
+    <div v-for="(r, i) in o.rolls" :key="i" class="row">
+      <label :for="idp + '-roll' + i" style="white-space:nowrap">ม้วนที่ {{ i + 1 }} ยาว</label>
+      <div class="unitbox grow" :class="{ bad: touched && !(Number(r.len) > 0) }"><input :id="idp + '-roll' + i" type="number" inputmode="decimal" step="any" min="0" v-model.number="r.len"><span>m</span></div>
+      <button type="button" class="btn ghost icon" :disabled="o.rolls.length === 1" @click="o.rolls.splice(i, 1)" :aria-label="'ลบม้วนที่ ' + (i + 1)"><ic n="x"/></button>
+    </div>
+    <button type="button" class="btn" @click="o.rolls.push({ len: null })"><ic n="plus"/>เพิ่มม้วน</button>
+    <p><b>รวม {{ o.rolls.length }} ม้วน {{ $fmt(total, 'm') }}</b></p>
+  </div>
+  <div class="field"><label :for="idp + '-wh'" class="req">คลังที่มีของ</label>
+    <select :id="idp + '-wh'" class="input" :class="{ bad: touched && !o.whId }" v-model="o.whId">
+      <option v-for="w in whs" :key="w.id" :value="w.id">{{ w.name }}</option></select></div>
+  <div class="field"><label :for="idp + '-sh'">ชั้นที่วาง</label>
+    <select :id="idp + '-sh'" class="input" v-model="o.shelf"><option v-for="s in shelves" :key="s" :value="s">{{ s }}</option></select>
+    <p class="help">ย้ายชั้นทีหลังได้</p></div>
+  <p class="msg info"><ic n="info"/><span>{{ T.N17r(route, needsApproval) }}</span></p>
+</div>`,
+  };
+
   // ---------- กล่องสร้างสินค้า ----------
   // <product-dialog :initial-name :initial-code :from-search @created(product, result) @use-existing(product) @close/>
   const ProductDialog = {
-    components: { CatPick, UnitPick, CodeField },
+    components: { CatPick, UnitPick, CodeField, OpenFields },
     props: { initialName: String, initialCode: String, fromSearch: Boolean },
     emits: ['close', 'created', 'use-existing'],
     data() {
@@ -87,7 +132,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
         s: SM.state, T, PD,
         name: this.initialName || '', brand: '', model: '', category: '', picked: '', isRoll: false, photos: [], busy: 0, photoErr: '',
         code: this.initialCode || '', note: '', buyUnit: '', buyFactor: '', reorderPoint: '', scrapMin: '', needsApproval: false,
-        hasStock: false, whId: null, qty: null, rolls: [{ len: null }], error: '', touched: false,
+        hasStock: false, o: newOpen(), error: '', touched: false,
       };
     },
     computed: {
@@ -101,24 +146,18 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       alike() { return this.exact ? [] : this.similar.slice(0, 3); },
       unit() { return this.isRoll ? 'm' : this.picked; },
       catApproval() { return this.s.approvalCats.includes(this.category); },
-      rollTotal() { return this.rolls.reduce((a, r) => a + (Number(r.len) || 0), 0); },
-      badRolls() { return this.rolls.some(r => !(Number(r.len) > 0)); },
-      badQty() { return !this.isRoll && S.qtyError({ unit: this.unit }, this.qty); },
+      route() { return S.openingRoute(this.s, null, this.user.id); },
       missing() {
         const m = [];
         if (!this.name.trim()) m.push('ชื่อสินค้า');
         if (!this.category) m.push('หมวดหมู่');
         if (!this.unit) m.push('หน่วย');
-        if (!this.hasStock) return m;
-        if (!this.whId) m.push(T.N14.wh);
-        if (this.isRoll && this.badRolls) m.push(T.N14.rolls);
-        if (this.badQty) m.push(this.badQty === T.N06() ? T.N14.qty : this.badQty);
-        return m;
+        return this.hasStock ? [...m, ...openMissing(this.o, this.isRoll, this.unit)] : m;
       },
       canCreate() { return !this.exact && !this.missing.length && !this.busy; },
     },
     watch: {
-      hasStock(v) { if (v && !this.whId) this.whId = (this.whs.find(w => w.id === this.s.cart.whId) || this.whs[0] || {}).id || null; },
+      hasStock(v) { if (v && !this.o.whId) this.o.whId = (this.whs.find(w => w.id === this.s.cart.whId) || this.whs[0] || {}).id || null; },
     },
     mounted() { this.$refs.dlg.showModal(); },
     methods: {
@@ -135,7 +174,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
         this.touched = true; this.error = '';
         if (!this.canCreate) return;
         try {
-          const opening = this.hasStock ? { whId: this.whId, qty: this.qty, rollLengths: this.rolls.map(r => r.len) } : null;
+          const opening = this.hasStock ? { whId: this.o.whId, shelf: this.o.shelf, qty: this.o.qty, rollLengths: this.o.rolls.map(r => r.len) } : null;
           const r = S.createProduct(this.s, {
             name: this.name, brand: this.brand, model: this.model, category: this.category, unit: this.unit, isRoll: this.isRoll,
             vendorCode: this.code, note: this.note, buyUnit: this.buyUnit, buyFactor: this.buyFactor, reorderPoint: this.reorderPoint,
@@ -186,23 +225,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
         <span><b>ต้องให้หัวหน้าอนุมัติเมื่อยอดเปลี่ยน</b><br><span class="help">{{ catApproval ? 'หมวดนี้ตั้งให้ต้องอนุมัติอยู่แล้ว' : 'ใช้กับการลงยอดตั้งต้นและการปรับยอดจากการนับ' }}</span></span></label>
       <label class="switch"><input type="checkbox" v-model="hasStock"><span><b>มีของนี้อยู่ในคลังแล้ว</b></span></label>
       <div v-if="hasStock" class="card stack open-anim">
-        <div class="field"><label for="pd-wh" class="req">คลังที่มีของ</label>
-          <select id="pd-wh" class="input" :class="{ bad: touched && !whId }" v-model="whId">
-            <option v-for="w in whs" :key="w.id" :value="w.id">{{ w.name }}</option></select>
-          <p class="help">{{ T.N16() }}</p></div>
-        <div v-if="!isRoll" class="field"><label for="pd-qty" class="req">มีอยู่เท่าไร</label>
-          <div class="unitbox" :class="{ bad: touched && badQty }"><input id="pd-qty" type="number" inputmode="decimal" step="any" min="0" v-model.number="qty"><span>{{ unit || 'หน่วย' }}</span></div></div>
-        <div v-else class="stack">
-          <span class="label req">ม้วนละกี่เมตร</span>
-          <div v-for="(r, i) in rolls" :key="i" class="row">
-            <label :for="'pd-roll' + i" style="white-space:nowrap">ม้วนที่ {{ i + 1 }} ยาว</label>
-            <div class="unitbox grow" :class="{ bad: touched && !(Number(r.len) > 0) }"><input :id="'pd-roll' + i" type="number" inputmode="decimal" step="any" min="0" v-model.number="r.len"><span>m</span></div>
-            <button type="button" class="btn ghost icon" :disabled="rolls.length === 1" @click="rolls.splice(i, 1)" :aria-label="'ลบม้วนที่ ' + (i + 1)"><ic n="x"/></button>
-          </div>
-          <button type="button" class="btn" @click="rolls.push({ len: null })"><ic n="plus"/>เพิ่มม้วน</button>
-          <p><b>รวม {{ rolls.length }} ม้วน {{ $fmt(rollTotal, 'm') }}</b></p>
-        </div>
-        <p class="msg info"><ic n="info"/><span>{{ T.N17(direct) }}</span></p>
+        <open-fields idp="pd" :o="o" :is-roll="isRoll" :unit="unit" :whs="whs" :route="route" :needs-approval="false" :touched="touched"/>
       </div>
       <details :open="!!initialCode"><summary class="link" style="display:inline-flex;align-items:center">ข้อมูลเพิ่มเติม (ไม่บังคับ)</summary>
         <div class="stack" style="margin-top:8px">
@@ -292,13 +315,13 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
 
   // ---------- แผ่นแก้สินค้า (bottom sheet บนมือถือ) ----------
   const ProductSheet = {
-    components: { CatPick, UnitPick, CodeField },
+    components: { CatPick, UnitPick, CodeField, OpenFields },
     props: { productId: String },
     emits: ['close'],
     data() {
       const p = SM.state.products.find(x => x.id === this.productId);
       return {
-        s: SM.state, T, PD, error: '', confirmOff: false, offErr: '',
+        s: SM.state, T, PD, error: '', confirmOff: false, offErr: '', foundOpen: false, fo: newOpen(), foTouched: false, foErr: '',
         f: { name: p.name, brand: p.brand, model: p.model, vendorCode: p.vendorCode, note: p.note, category: p.category, unit: p.unit,
           isRoll: p.isRoll, needsApproval: p.needsApproval, buyUnit: p.buyUnit, buyFactor: p.buyFactor, reorderPoint: p.reorderPoint, scrapMin: p.scrapMin },
       };
@@ -311,6 +334,9 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       unitNow() { return this.f.isRoll ? 'm' : this.f.unit; },
       history() { return S.auditFor(this.s, this.p.id).slice().reverse().slice(0, 20); },
       active() { return this.p.active !== false; },
+      whs() { return this.s.warehouses.filter(w => !w.locked); },
+      foRoute() { return S.openingRoute(this.s, this.p.id, this.user.id); },
+      foMissing() { return openMissing(this.fo, this.p.isRoll, this.p.unit); },
       who() { return (id) => (this.s.users.find(u => u.id === id) || {}).name || id; },
     },
     mounted() { this.$refs.dlg.showModal(); },
@@ -328,6 +354,15 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
         }
         if (!Object.keys(patch).length) { this.close(); return; }
         try { S.updateProduct(this.s, p.id, patch, this.user.id); SM.toast('ok', PD.saved); this.close(); } catch (e) { this.error = e.message; }
+      },
+      showFound() { this.foErr = ''; this.foTouched = false; this.fo = newOpen((this.whs.find(w => w.id === this.s.cart.whId) || this.whs[0] || {}).id || null); this.foundOpen = true; },
+      submitFound() {
+        this.foTouched = true; this.foErr = '';
+        if (this.foMissing.length) { this.foErr = PD.missing(this.foMissing); return; }
+        try {
+          const r = S.submitOpening(this.s, { productId: this.p.id, whId: this.fo.whId, shelf: this.fo.shelf, qty: this.fo.qty, rollLengths: this.fo.rolls.map(x => x.len), kind: 'found' }, this.user.id);
+          SM.toast('ok', r.toast, 5000); this.foundOpen = false;
+        } catch (e) { this.foErr = e.message; }
       },
       deactivate() {
         this.offErr = '';
@@ -386,6 +421,17 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
             <div v-if="p.isRoll" class="ro"><span class="label">เศษม้วนที่สั้นกว่านี้ถือเป็นของเสีย</span><b>{{ $fmt(p.scrapMin, 'm') }}</b><span class="help">{{ PD.headOnly }}</span></div>
           </template>
         </div></details>
+
+      <div v-if="active" class="stack">
+        <button v-if="!foundOpen" type="button" class="btn block" @click="showFound"><ic n="plus"/>ลงยอดที่เจอเพิ่ม</button>
+        <div v-else class="card stack open-anim">
+          <h3>ลงยอดที่เจอเพิ่ม</h3>
+          <open-fields idp="fo" :o="fo" :is-roll="p.isRoll" :unit="p.unit" :whs="whs" :route="foRoute" :needs-approval="p.needsApproval" :touched="foTouched"/>
+          <p v-if="foErr" class="msg bad" role="alert"><ic n="x"/><span>{{ foErr }}</span></p>
+          <div class="row"><button type="button" class="btn" @click="foundOpen = false">ยกเลิก</button>
+            <button type="button" class="btn primary" @click="submitFound">ลงยอด</button></div>
+        </div>
+      </div>
 
       <details><summary class="link" style="display:inline-flex;align-items:center">ประวัติ ({{ history.length }})</summary>
         <ul class="hist"><li v-if="!history.length" class="muted">ยังไม่มีประวัติการแก้</li>
