@@ -130,7 +130,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     if (!active) {
       if (state.prs.some(x => x.productId === id && x.status === 'open')) throw new Error('เลิกใช้ไม่ได้ ยังมีรายการต้องซื้อค้าง');
       // ใบเบิกที่ยังรอของ/รออนุมัติ หรือของที่ออกไปกับงานที่ยังเปิดและยังไม่คืน
-      const open = (r) => r.status !== 'rejected' && r.lines.some(l => l.productId === id &&
+      const open = (r) => !['rejected', 'cancelled', 'closed'].includes(r.status) && r.lines.some(l => l.productId === id &&
         (l.qty - l.issued > 0 || (l.issued - (l.returned || 0) > 0 && byId(state.jobs, r.jobId)?.open)));
       if (state.reqs.some(open)) throw new Error('เลิกใช้ไม่ได้ ยังมีใบเบิกที่ค้างของนี้อยู่');
     }

@@ -103,3 +103,11 @@ test('F11 คืนของหลวมของสินค้าเลิก�
   const s = SM.seed(); off(s, 'P-0007');
   assert.throws(() => S.returnLoose(s, { productId: 'P-0007', whId: 'wh-main', shelf: 'ทั่วไป', qty: 1, condition: 'ok', reason: 'x' }, 'u-store'), /กล่องพักสาย 4x4 นิ้ว เลิกใช้แล้ว/);
 });
+
+test('F2c ใบเบิกที่ยกเลิก/ปิดแล้ว (มีเศษไม่ได้จ่าย) ไม่ขวางการเลิกใช้', () => {
+  for (const status of ['cancelled', 'closed']) {
+    const s = SM.seed(); s.stock = s.stock.filter(x => x.productId !== 'P-0004'); s.prs = [];
+    s.reqs = [{ id: 'REQ-1', userId: 'u-eng', whId: 'wh-main', jobId: 'J-25-010', status, lines: [{ productId: 'P-0004', qty: 5, issued: 2, reserved: 0, returned: 2 }] }];
+    assert.equal(S.setProductActive(s, 'P-0004', false, 'u-head').active, false, status);
+  }
+});
