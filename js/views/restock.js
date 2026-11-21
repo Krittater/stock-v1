@@ -179,7 +179,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     },
     template: `
 <div class="narrow stack lg">
-  <div class="page-head" style="margin:0"><h1 class="grow">รับของเข้า</h1></div>
+  <div class="page-head" style="margin:0"><h1 class="grow">รับของ / ต้องซื้อ</h1></div>
   <p v-if="!canReceive" class="msg info"><ic n="info"/><span>บัญชีนี้ดูรายการได้ การรับของเข้าคลังทำโดย Store หรือหัวหน้า</span></p>
   <div class="tabs" role="tablist">
     <button v-for="[k, label, n] in tabs" :key="k" role="tab" :aria-selected="tab === k" @click="tab = k">{{ label }}<span v-if="n"> ({{ n }})</span></button>
@@ -193,7 +193,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
           <p class="small">{{ RC.receipt(result.receipt.id, result.readied.length) }}</p></div>
         <button class="btn ghost icon" @click="result = null" aria-label="ปิดผลลัพธ์"><ic n="x"/></button></div>
       <div class="rows">
-        <p v-for="(l, i) in result.receipt.lines" :key="i" class="small"><b>{{ $product(l.productId).name }}</b> · รับ {{ $fmt(l.qty, $product(l.productId).unit) }} · {{ RC.COND[l.condition] }}<template v-if="l.shelf"> · เก็บที่ {{ l.shelf }}</template></p>
+        <p v-for="(l, i) in result.receipt.lines" :key="i" class="small"><b>{{ $product(l.productId).name }}</b> · รับ {{ $fmt(l.qty, $product(l.productId).unit) }} · {{ RC.COND[l.condition] }}<template v-if="l.shelf"> · เก็บที่ {{ l.shelf === 'QC' ? 'ชั้นรอตรวจ' : l.shelf }}</template></p>
       </div>
       <template v-if="result.rolls.length">
         <div class="stack" style="gap:6px"><b>ม้วนที่สร้าง</b>

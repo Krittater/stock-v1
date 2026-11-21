@@ -184,7 +184,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     <div class="rows">
       <div v-for="(l, i) in result.lines" :key="i" class="stack" style="gap:6px">
         <p><b>{{ $product(l.productId).name }}</b></p>
-        <p class="small">คืน {{ $fmt(l.qty, $product(l.productId).unit) }} · {{ RT.COND[l.condition] }}<template v-if="l.shelf"> · เก็บที่ {{ l.shelf }}</template></p>
+        <p class="small">คืน {{ $fmt(l.qty, $product(l.productId).unit) }} · {{ RT.COND[l.condition] }}<template v-if="l.shelf"> · เก็บที่ {{ l.shelf === 'QC' ? 'ชั้นรอตรวจ' : l.shelf }}</template></p>
         <p v-if="l.newRollId" class="small">ม้วนใหม่: <span class="mono">{{ l.newRollId }}</span><span v-if="l.fromRollId" class="muted"> (ตัดมาจาก <span class="mono">{{ l.fromRollId }}</span>)</span></p>
         <button v-if="l.newRollId" class="btn" @click="print(l)"><ic n="print"/>พิมพ์ป้ายเลขม้วน</button>
       </div>
