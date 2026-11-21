@@ -128,3 +128,74 @@ test('บรรทัดสินค้าซ้ำในใบเดียว: 
   assert.deepEqual(req.lines.map(l => l.returned), [3, 1]);
   assert.throws(() => go(2), /คืนได้ไม่เกิน 1 ตัว/);
 });
+
+test('RT-G2 Store คืนของที่ไม่มีใบเบิกได้ วิศวกรทำไม่ได้ ต้องมีเหตุผล', () => {
+  const s = setup();
+  const a = { productId: 'P-0007', whId: 'wh-main', shelf: 'B-01', qty: 2, condition: 'ok', reason: 'เหลือจากงานเก่า' };
+  const before = qtyOf(s, 'P-0007', 'B-01');
+  assert.throws(() => S.returnLoose(s, a, 'u-eng'), /ให้หัวหน้าทำแทน/);
+  assert.throws(() => S.returnLoose(s, { ...a, reason: '  ' }, 'u-store'), /กรุณาระบุว่าของมาจากไหน/);
+  assert.throws(() => S.returnLoose(s, { ...a, qty: 1.5 }, 'u-store'), /ใบต้องเป็นจำนวนเต็ม/);
+  const rec = S.returnLoose(s, { ...a, jobId: 'J-25-010' }, 'u-store');
+  assert.deepEqual([rec.reqId, rec.reason, rec.jobId], [null, 'เหลือจากงานเก่า', 'J-25-010']);
+  assert.equal(qtyOf(s, 'P-0007', 'B-01'), before + 2);
+  assert.deepEqual(S.jobUsage(s, 'J-25-010').find(u => u.productId === 'P-0007'), { productId: 'P-0007', issued: 5, returned: 2, scrapped: 0, used: 3 });
+  const r2 = S.returnLoose(s, { productId: 'P-0011', whId: 'wh-main', shelf: 'ทั่วไป', qty: 7.5, condition: 'ok', reason: 'ตัดเหลือ' }, 'u-head');
+  assert.equal(s.rolls.find(r => r.id === r2.lines[0].newRollId).length, 7.5);
+  assert.ok(S.auditFor(s, rec.id).length);
+});
+
+test('RT-G7 หัวหน้ากลับรายการคืนได้ ยอดกลับเท่าเดิม', () => {
+  const s = setup();
+  const snap = () => JSON.stringify([s.stock, s.rolls, s.reqs.find(r => r.id === 'REQ-690010').lines.map(l => [l.returned, l.scrapped || 0])]);
+  const before = snap();
+  const rec = ret(s, [{ productId: 'P-0007', qty: 2, condition: 'ok', shelf: 'B-01' }, { productId: 'P-0007', qty: 1, condition: 'scrap' }, { productId: 'P-0011', qty: 10, condition: 'damaged' }]);
+  assert.throws(() => S.reverseReturn(s, rec.id, 'u-store'), /ให้หัวหน้าทำแทน/);
+  S.reverseReturn(s, rec.id, 'u-head');
+  assert.equal(snap(), before);
+  assert.equal(rec.reversedBy, 'u-head'); assert.ok(rec.reversedAt);
+  assert.throws(() => S.reverseReturn(s, rec.id, 'u-head'), /กลับรายการไปแล้ว/);
+  assert.ok(S.auditFor(s, rec.id).some(e => e.action === 'return-reverse'));
+  const loose = S.returnLoose(s, { productId: 'P-0007', whId: 'wh-main', shelf: 'B-01', qty: 2, condition: 'ok', reason: 'x' }, 'u-store');
+  S.reverseReturn(s, loose.id, 'u-head');
+  assert.equal(snap(), before);
+});
+
+test('กลับรายการคืนหลังม้วนใหม่ถูกตัด = ปฏิเสธ ยอดไม่ติดลบ', () => {
+  const s = setup();
+  const rec = ret(s, [{ productId: 'P-0011', qty: 20, condition: 'ok' }]);
+  s.rolls.find(r => r.id === rec.lines[0].newRollId).length = 15;   // เบิกตัดไป 5 m
+  const snap = JSON.stringify([s.stock, s.rolls, s.reqs]);
+  assert.throws(() => S.reverseReturn(s, rec.id, 'u-head'), /ถูกใช้ไปแล้ว/);
+  assert.equal(JSON.stringify([s.stock, s.rolls, s.reqs]), snap);
+  assert.ok(s.rolls.every(r => r.length > 0) && s.stock.every(x => x.qty >= 0));
+  // แถวสต็อกไม่พอ / ของถูกกันไว้ให้ใบอื่นจนติดลบ
+  const r2 = ret(s, [{ productId: 'P-0007', qty: 2, condition: 'ok', shelf: 'B-01' }], 'u-eng');
+  s.stock.find(x => x.productId === 'P-0007' && x.shelf === 'B-01').qty = 1;
+  assert.throws(() => S.reverseReturn(s, r2.id, 'u-head'), /ถูกใช้ไปแล้ว/);
+  s.stock.find(x => x.productId === 'P-0007' && x.shelf === 'B-01').qty = 60;
+  const tot = S.available(s, 'P-0007', 'wh-main');
+  s.reqs.push({ id: 'REQ-690030', userId: 'u-head', whId: 'wh-main', jobId: 'J-25-010', note: '', status: 'ready', at: '2026-11-14T09:00:00',
+    lines: [{ productId: 'P-0007', qty: tot, issued: 0, reserved: tot, returned: 0, single: false, cuts: [] }] });
+  assert.throws(() => S.reverseReturn(s, r2.id, 'u-head'), /ถูกใช้ไปแล้ว/);
+});
+
+test('RT-G4 qcDecide restock ย้ายไปชั้นปกติ · scrap ต้องมีเหตุผล', () => {
+  const s = setup();
+  ret(s, [{ productId: 'P-0007', qty: 3, condition: 'damaged' }]);
+  const rec = ret(s, [{ productId: 'P-0011', qty: 8, condition: 'damaged' }]);
+  const q = { whId: 'wh-main', productId: 'P-0007' };
+  const avail = S.available(s, 'P-0007', 'wh-main');
+  assert.throws(() => S.qcDecide(s, { ...q, qty: 1, decision: 'restock', shelf: 'B-01' }, 'u-eng'), /ให้หัวหน้าทำแทน/);
+  assert.throws(() => S.qcDecide(s, { ...q, qty: 1, decision: 'restock', shelf: 'QC' }, 'u-store'), /ชั้นรอตรวจ/);
+  assert.throws(() => S.qcDecide(s, { ...q, qty: 4, decision: 'restock', shelf: 'B-01' }, 'u-store'), /แค่ 3 ใบ/);
+  assert.throws(() => S.qcDecide(s, { ...q, qty: 1.5, decision: 'restock', shelf: 'B-01' }, 'u-store'), /ใบต้องเป็นจำนวนเต็ม/);
+  assert.throws(() => S.qcDecide(s, { ...q, qty: 1, decision: 'scrap' }, 'u-store'), /เหตุผล/);
+  S.qcDecide(s, { ...q, qty: 2, decision: 'restock', shelf: 'B-01' }, 'u-store');
+  assert.equal(S.available(s, 'P-0007', 'wh-main'), avail + 2);
+  S.qcDecide(s, { ...q, qty: 1, decision: 'scrap', reason: 'พัง' }, 'u-head');
+  assert.equal(qtyOf(s, 'P-0007', 'QC'), 0);
+  S.qcDecide(s, { whId: 'wh-main', productId: 'P-0011', rollId: rec.lines[0].newRollId, qty: 8, decision: 'restock', shelf: 'ทั่วไป' }, 'u-store');
+  assert.equal(s.rolls.find(r => r.id === rec.lines[0].newRollId).shelf, 'ทั่วไป');
+  assert.ok(s.audit.filter(e => e.action.startsWith('qc-')).length >= 3);
+});
