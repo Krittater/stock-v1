@@ -47,7 +47,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
         const lines = Object.entries(this.form).map(([productId, qty]) => ({ productId, qty }));
         try {
           const n = lines.filter(l => l.qty !== null && l.qty !== '').length;
-          S.returnItems(this.s, { reqId: this.req.id, lines, userId: this.user.id });
+          S.returnItems(this.s, { reqId: this.req.id, whId: this.req.whId, shelf: 'ทั่วไป', lines: lines.map(l => ({ ...l, condition: 'ok' })) }, this.user.id);
           SM.toast('ok', `คืนของแล้ว ${n} รายการ เข้า${this.$wh(this.req.whId).name}`);
           this.form = {};
         } catch (e) { if (e.productId) this.errs = { [e.productId]: e.message }; else this.formErr = e.message; }

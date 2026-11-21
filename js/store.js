@@ -417,28 +417,6 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     return req;
   };
 
-  S.returnItems = function (state, { reqId, lines }) {
-    const req = byId(state.reqs, reqId);
-    if (!req) throw new Error('ไม่พบใบเบิก');
-    openWh(state, req.whId);
-    const todo = lines.filter(l => l.qty !== null && l.qty !== '' && l.qty !== undefined).map(l => {
-      const line = req.lines.find(x => x.productId === l.productId);
-      const p = product(state, l.productId);
-      const max = round2(line.issued - line.returned);
-      const err = S.qtyError(p, l.qty);
-      const e = err ? new Error(err) : Number(l.qty) > max ? new Error(`คืนได้ไม่เกิน ${fmt(max, p.unit)}`) : null;
-      if (e) { e.productId = p.id; throw e; }
-      return { line, p, incoming: stockIn(state, p, req.whId, { qty: l.qty, rollLengths: [l.qty] }, true) };
-    });
-    if (!todo.length) throw new Error('ใส่จำนวนที่จะคืนอย่างน้อย 1 รายการ');
-    for (const { line, p, incoming } of todo) {
-      incoming.apply();
-      line.returned = round2(line.returned + incoming.amount);
-      reserveForWaiting(state, p.id, req.whId);
-    }
-    return req;
-  };
-
   S.lowStock = (state) => state.products
     .map(p => ({ product: p, total: S.totalStock(state, p.id).qty, reorderPoint: p.reorderPoint }))
     .filter(x => x.reorderPoint > 0 && x.total < x.reorderPoint);

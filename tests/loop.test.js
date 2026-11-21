@@ -1,5 +1,5 @@
 const test = require('node:test'); const assert = require('node:assert');
-require('../js/seed.js'); require('../js/text.js'); const SM = require('../js/store.js');
+require('../js/seed.js'); require('../js/text.js'); const SM = require('../js/store.js'); require('../js/domain/returns.js');
 const S = SM.store;
 const fill = (s, lines) => Object.assign(s.cart, { lines, whId: 'wh-main', jobId: 'J-25-010', note: '' });
 const texts = (s, uid) => s.notifs.filter(n => n.toUserId === uid).map(n => n.text);
@@ -47,14 +47,15 @@ test('จ่ายไม่สำเร็จ (เดโม) → ไปหน้
 test('คืนของ: กลับเข้าคลัง ห้ามคืนเกินที่จ่าย', () => {
   const s = SM.seed(); fill(s, [{ productId: 'P-0004', qty: 5 }, { productId: 'P-0011', qty: 80 }]);
   const { req } = S.issueNow(s, 'u-eng');
-  S.returnItems(s, { reqId: req.id, lines: [{ productId: 'P-0004', qty: 2 }, { productId: 'P-0011', qty: 10 }], userId: 'u-eng' });
+  const ret = (lines) => S.returnItems(s, { reqId: req.id, whId: 'wh-main', shelf: 'ทั่วไป', lines: lines.map(l => ({ ...l, condition: 'ok' })) }, 'u-eng');
+  ret([{ productId: 'P-0004', qty: 2 }, { productId: 'P-0011', qty: 10 }]);
   assert.equal(S.available(s, 'P-0004', 'wh-main'), 27);
   assert.equal(S.available(s, 'P-0011', 'wh-main'), 30);                 // 20 + ม้วนคืน 10
   assert.equal(s.rolls.filter(r => r.productId === 'P-0011' && r.whId === 'wh-main').length, 2);
   assert.deepEqual(req.lines.map(l => l.returned), [2, 10]);
-  assert.throws(() => S.returnItems(s, { reqId: req.id, lines: [{ productId: 'P-0004', qty: 4 }], userId: 'u-eng' }),
+  assert.throws(() => ret([{ productId: 'P-0004', qty: 4 }]),
     /คืนได้ไม่เกิน 3 ตัว/);
-  assert.throws(() => S.returnItems(s, { reqId: req.id, lines: [{ productId: 'P-0011', qty: 5 }, { productId: 'P-0004', qty: 9 }], userId: 'u-eng' }));
+  assert.throws(() => ret([{ productId: 'P-0011', qty: 5 }, { productId: 'P-0004', qty: 9 }]));
   assert.equal(req.lines[1].returned, 10);                               // ผิดรายการเดียว = ไม่คืนอะไรเลย
 });
 
