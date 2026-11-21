@@ -150,6 +150,8 @@ SM.T.status = (status) => ({
   pending_approval: { label: 'รออนุมัติ', icon: 'send', tone: 'info' },
   rejected: { label: 'ไม่อนุมัติ', icon: 'x', tone: 'bad' },
   pick_failed: { label: 'จ่ายไม่สำเร็จ', icon: 'warn', tone: 'warn' },
+  closed: { label: 'ปิดใบเบิกแล้ว', icon: 'lock', tone: 'info' },
+  cancelled: { label: 'ยกเลิกแล้ว', icon: 'x', tone: 'bad' },
 }[status] || { label: status, icon: 'info', tone: 'info' });
 
 if (typeof module !== 'undefined') module.exports = SM;

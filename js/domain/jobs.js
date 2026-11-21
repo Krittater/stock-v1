@@ -15,7 +15,8 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     return state.jobs.map(job => ({ job, pct: Math.round(similarity(job.name, n) * 100) })).filter(x => x.pct >= 45).sort((a, b) => b.pct - a.pct);
   };
 
-  const nextId = (state, yy) => {
+  S.nextJobId = (state) => {
+    const yy = now().slice(2, 4);
     const max = Math.max(0, ...state.jobs.filter(j => j.id.startsWith(`J-${yy}-`)).map(j => Number(j.id.split('-')[2]) || 0));
     return `J-${yy}-${String(max + 1).padStart(3, '0')}`;
   };
@@ -33,7 +34,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
   S.createJob = function (state, input, userId) {
     const f = { ...clean(input), ownerId: input.ownerId || userId, start: input.start || today(), due: input.due || null };
     check(state, f);
-    const job = { id: nextId(state, now().slice(2, 4)), name: f.name, customer: f.customer || '', open: true, ownerId: f.ownerId,
+    const job = { id: S.nextJobId(state), name: f.name, customer: f.customer || '', open: true, ownerId: f.ownerId,
       site: f.site || '', start: f.start, due: f.due, closedAt: null, note: f.note || '' };
     state.jobs.push(job);
     S.log(state, userId, 'job-create', job.id, `เปิดงาน ${job.id} ${job.name}`);
@@ -53,7 +54,11 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
 
   S.openReqsOf = (state, jobId) => state.reqs.filter(r => r.jobId === jobId && OPEN.includes(r.status));
 
+  // ปุ่มในหน้าจอใช้เงื่อนไขเดียวกับที่ closeReq/cancelReq ตรวจ
+  S.canCloseReq = (req) => !!req && OPEN.includes(req.status) && req.lines.some(l => l.issued > 0);
+  S.canCancelReq = (req) => !!req && OPEN.includes(req.status) && !req.lines.some(l => l.issued > 0);
   const openPRsOf = (state, reqIds) => state.prs.filter(p => reqIds.includes(p.reqId) && p.status === 'open' && p.received === 0);
+  S.openPRsOf = openPRsOf;
   const reqIdsOf = (state, jobId) => state.reqs.filter(r => r.jobId === jobId).map(r => r.id);
 
   S.closeJobCheck = function (state, jobId) {
@@ -93,6 +98,17 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     return S.createJob(state, { name: j.name + ' (ใหม่)', customer: j.customer, site: j.site, ownerId: j.ownerId }, userId);
   };
 
+  // CSV ยอดใช้ของงาน (เปิดใน Excel ได้: BOM + เครื่องหมายคำพูดครอบช่องที่มี , " หรือขึ้นบรรทัดใหม่)
+  const csvCell = (v) => /[",\r\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : String(v);
+  S.jobUsageCsv = function (state, jobId) {
+    const rows = [['สินค้า', 'รหัส', 'เบิก', 'คืน', 'ของเสีย', 'ใช้จริง', 'หน่วย']];
+    for (const u of S.jobUsage(state, jobId)) {
+      const p = byId(state.products, u.productId);
+      rows.push([p.name, p.id, u.issued, u.returned, u.scrapped, u.used, p.unit]);
+    }
+    return '\ufeff' + rows.map(r => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
+  };
+
   // ปล่อยของที่กันไว้ แล้วให้ใบเบิกอื่นที่รออยู่ได้ของต่อ
   function finish(state, req, status, userId, cancelPRs, verb) {
     const touched = [...new Set(req.lines.filter(l => l.reserved > 0).map(l => l.productId))];
@@ -106,13 +122,13 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
 
   S.closeReq = function (state, reqId, userId, { cancelPRs = true } = {}) {
     const req = byId(state.reqs, reqId);
-    if (!req || !OPEN.includes(req.status) || !req.lines.some(l => l.issued > 0)) throw new Error('ใบนี้ปิดไม่ได้');
+    if (!S.canCloseReq(req)) throw new Error('ใบนี้ปิดไม่ได้');
     return finish(state, req, 'closed', userId, cancelPRs, 'ปิดใบเบิก');
   };
 
   S.cancelReq = function (state, reqId, userId, { cancelPRs = true } = {}) {
     const req = byId(state.reqs, reqId);
-    if (!req || !OPEN.includes(req.status) || req.lines.some(l => l.issued > 0)) throw new Error('ใบนี้ยกเลิกไม่ได้');
+    if (!S.canCancelReq(req)) throw new Error('ใบนี้ยกเลิกไม่ได้');
     return finish(state, req, 'cancelled', userId, cancelPRs, 'ยกเลิกใบเบิก');
   };
 })();

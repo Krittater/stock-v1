@@ -7,7 +7,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
   // ใบเบิกที่ผ่านมา (#/orders) · รายละเอียด+หยิบ (#/orders/:id)
   SM.views.orders = {
     props: { route: Object },
-    data: () => ({ s: SM.state, T, when, scope: 'mine' }),
+    data: () => ({ s: SM.state, T, when, scope: 'mine', act: null }),
     computed: {
       user() { return this.s.users.find(u => u.id === this.s.currentUserId); },
       staff() { return this.user.role !== 'engineer'; },
@@ -29,6 +29,8 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
           { label: 'จ่ายครบ', note: '', done: st === 'issued' },
         ];
       },
+      canClose() { return S.canCloseReq(this.req); },
+      canCancel() { return S.canCancelReq(this.req); },
       canPick() { return this.req && this.req.lines.some(l => l.reserved > 0); },
     },
     methods: {
@@ -67,7 +69,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
         <span class="tag" :class="T.status(req.status).tone"><ic :n="T.status(req.status).icon"/>{{ T.status(req.status).label }}</span></div>
       <section class="card stack">
         <dl class="info">
-          <div class="kv"><dt>งาน</dt><dd><span class="mono">{{ req.jobId }}</span> {{ $job(req.jobId).name }}</dd></div>
+          <div class="kv"><dt>งาน</dt><dd><a :href="'#/jobs/' + req.jobId"><span class="mono">{{ req.jobId }}</span> {{ $job(req.jobId).name }}</a></dd></div>
           <div class="kv"><dt>เบิกจาก</dt><dd>{{ $wh(req.whId).name }}</dd></div>
           <div class="kv"><dt>ผู้เบิก</dt><dd>{{ $userOf(req.userId).name }}</dd></div>
           <div v-if="req.note" class="kv"><dt>หมายเหตุ</dt><dd>{{ req.note }}</dd></div>
@@ -102,10 +104,13 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
         <div class="row res-btns">
           <button v-if="canPick" class="btn primary big" @click="pick"><ic n="check"/>จ่ายของ</button>
           <a v-if="canReturn" class="btn big" :href="'#/returns?req=' + req.id"><ic n="undo"/>คืนของ</a>
+          <button v-if="canClose" class="btn big" @click="act = 'close'">ปิดใบเบิก</button>
+          <button v-if="canCancel" class="btn big" @click="act = 'cancel'">ยกเลิก</button>
         </div>
       </section>
     </template>
   </template>
+  <req-action v-if="act" :req-id="req.id" :mode="act" @close="act = null"/>
 </div>`,
   };
 })();

@@ -166,3 +166,30 @@ test('closeReq รับใบ ready ที่จ่ายแล้วบาง�
   const s3 = mk(); s3.reqs[s3.reqs.length - 1].lines[0].issued = 0;
   assert.throws(() => S.closeReq(s3, 'REQ-690020', 'u-store'), /^Error: ใบนี้ปิดไม่ได้$/);
 });
+
+test('nextJobId ตรงกับรหัสที่ createJob ออกให้จริง', () => {
+  const s = SM.seed();
+  assert.equal(S.nextJobId(s), `J-${YY}-001`);
+  const j = S.createJob(s, { name: 'งานแรก' }, 'u-eng');
+  assert.equal(j.id, `J-${YY}-001`); assert.equal(S.nextJobId(s), `J-${YY}-002`);
+});
+
+test('jobUsageCsv: BOM นำหน้า หัวคอลัมน์ครบ ภาษาไทยไม่เพี้ยน และครอบ "" ให้ช่องที่มี , หรือ "', () => {
+  const s = SM.seed();
+  const csv = S.jobUsageCsv(s, 'J-25-010');
+  assert.ok(csv.startsWith('\ufeffสินค้า,รหัส,เบิก,คืน,ของเสีย,ใช้จริง,หน่วย\r\n'));
+  assert.deepEqual(Buffer.from(csv).subarray(0, 3), Buffer.from([0xEF, 0xBB, 0xBF]));
+  const u = S.jobUsage(s, 'J-25-010')[0], p = s.products.find(x => x.id === u.productId);
+  assert.ok(csv.includes(`${p.id},${u.issued},${u.returned},${u.scrapped},${u.used},${p.unit}`));
+  p.name = 'สาย "A", 2 แกน';
+  assert.ok(S.jobUsageCsv(s, 'J-25-010').includes('"สาย ""A"", 2 แกน",'));
+});
+
+test('canCloseReq/canCancelReq ตรงกับที่ closeReq/cancelReq ยอมให้ทำ', () => {
+  const s = SM.seed();
+  addReq(s, 'REQ-690030', 'ready', [line({ issued: 2 })]); addReq(s, 'REQ-690031', 'waiting', [line()]);
+  const r = (id) => s.reqs.find(x => x.id === id);
+  assert.deepEqual([S.canCloseReq(r('REQ-690030')), S.canCancelReq(r('REQ-690030'))], [true, false]);
+  assert.deepEqual([S.canCloseReq(r('REQ-690031')), S.canCancelReq(r('REQ-690031'))], [false, true]);
+  assert.deepEqual([S.canCloseReq(r('REQ-690006')), S.canCancelReq(r('REQ-690006'))], [false, false]);
+});

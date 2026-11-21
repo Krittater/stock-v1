@@ -18,17 +18,18 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
   const JobDialog = {
     props: { initialName: String },
     emits: ['close', 'picked'],
-    data() { return { s: SM.state, T, name: this.initialName || '', customer: '' }; },
-    computed: { similar() { return S.similarJobs(this.s, this.name).filter(x => x.job.open).slice(0, 3); } },
+    data() { return { s: SM.state, T, name: this.initialName || '', customer: '', error: '' }; },
+    computed: { similar() { return S.similarJobs(this.s, this.name).slice(0, 3); } },
     mounted() { this.$refs.dlg.showModal(); },
     methods: {
       close() { this.$refs.dlg.close(); this.$emit('close'); },
       use(job) { this.$emit('picked', job); this.close(); },
       save() {
+        this.error = '';
         try {
           const job = S.createJob(this.s, { name: this.name, customer: this.customer }, this.s.currentUserId);
           SM.toast('ok', T.N52(job)); this.use(job);
-        } catch (e) { SM.toast('bad', T.N53(e.message), 5000); }
+        } catch (e) { this.error = T.N53(e.message); }   // กล่องเปิดอยู่ toast จะอยู่หลังกล่อง จึงแสดงในกล่อง
       },
     },
     template: `
@@ -40,11 +41,12 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       <div class="field"><label for="jd-name" class="req">ชื่องาน</label>
         <input id="jd-name" class="input" v-model="name" placeholder="เช่น ติดตั้งแอร์ ห้องประชุม" autocomplete="off">
         <div v-for="{ job: j } in similar" :key="j.id" class="msg warn"><ic n="warn"/>
-          <div class="grow stack"><span>{{ T.N51(j) }}</span><button type="button" class="btn" @click="use(j)">ใช้งานนี้</button></div></div>
+          <div class="grow stack"><span>{{ T.N51(j) }}</span><button v-if="j.open" type="button" class="btn" @click="use(j)">ใช้งานนี้</button><span v-else class="small">ปิดแล้ว</span></div></div>
       </div>
       <div class="field"><label for="jd-cust">ลูกค้าหรือสถานที่</label><input id="jd-cust" class="input" v-model="customer"></div>
     </div>
-    <div class="dlg-foot"><div class="row"><button type="button" class="btn" @click="close">ยกเลิก</button>
+    <div class="dlg-foot"><p v-if="error" class="msg bad" role="alert"><ic n="x"/><span>{{ error }}</span></p>
+      <div class="row"><button type="button" class="btn" @click="close">ยกเลิก</button>
       <button type="submit" class="btn primary" :disabled="!name.trim()">บันทึก</button></div></div>
   </form>
 </dialog>`,
