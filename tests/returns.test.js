@@ -114,3 +114,17 @@ test('Q9 returnHint เตือนเศษสั้นกว่า scrapMin', 
   assert.deepEqual(S.returnHint(s, 'P-0011', 5), { short: false, scrapMin: 3 });
   assert.equal(S.returnHint(s, 'P-0007', 1).short, false);
 });
+
+test('บรรทัดสินค้าซ้ำในใบเดียว: จำกัดตามผลรวม และลงยอดไล่ทีละบรรทัด', () => {
+  const s = SM.seed();
+  const L = (issued) => ({ productId: 'P-0004', qty: issued, issued, reserved: 0, returned: 0, single: false, cuts: [] });
+  const req = { id: 'REQ-690020', userId: 'u-eng', whId: 'wh-main', jobId: 'J-25-010', note: '', status: 'issued', at: '2026-11-13T09:00:00', lines: [L(3), L(2)] };
+  s.reqs.push(req);
+  const go = (qty) => S.returnItems(s, { reqId: req.id, whId: 'wh-main', shelf: 'ทั่วไป', lines: [{ productId: 'P-0004', qty, condition: 'ok' }] }, 'u-eng');
+  assert.throws(() => go(6), /คืนได้ไม่เกิน 5 ตัว/);
+  assert.equal(S.returnable(s, 'u-eng', 'REQ-690020')[0].lines.length, 1);
+  assert.equal(S.returnable(s, 'u-eng', 'REQ-690020')[0].lines[0].left, 5);
+  go(4);
+  assert.deepEqual(req.lines.map(l => l.returned), [3, 1]);
+  assert.throws(() => go(2), /คืนได้ไม่เกิน 1 ตัว/);
+});

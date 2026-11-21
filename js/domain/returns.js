@@ -16,8 +16,11 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       .filter(r => me.role !== 'engineer' || r.userId === userId)
       .map(req => ({
         req, by: byId(state.users, req.userId),
-        lines: req.lines.filter(l => left(l) > 0)
-          .map(l => ({ productId: l.productId, issued: l.issued, returned: l.returned, left: left(l), cuts: l.cuts })),
+        lines: [...new Set(req.lines.map(l => l.productId))].map(pid => {
+          const ls = req.lines.filter(l => l.productId === pid);
+          return { productId: pid, issued: round2(ls.reduce((a, l) => a + l.issued, 0)), returned: round2(ls.reduce((a, l) => a + l.returned, 0)),
+            left: round2(ls.reduce((a, l) => a + left(l), 0)), cuts: ls.flatMap(l => l.cuts) };
+        }).filter(l => l.left > 0),
       }))
       .filter(x => x.lines.length)
       .filter(x => {
@@ -43,16 +46,17 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     if (!todo.length) throw new Error('ยังไม่ได้กรอกจำนวนที่คืน');
     const sums = {};
     const items = todo.map(l => {
-      const rl = req.lines.find(x => x.productId === l.productId);
-      if (!rl) throw new Error('ไม่พบสินค้านี้ในใบเบิก');
+      const rls = req.lines.filter(x => x.productId === l.productId);
+      if (!rls.length) throw new Error('ไม่พบสินค้านี้ในใบเบิก');
       const p = byId(state.products, l.productId);
       const err = S.qtyError(p, l.qty);
       if (err) throw new Error(err);
       if (!['ok', 'damaged', 'scrap'].includes(l.condition)) throw new Error('เลือกสภาพของที่คืน');
       const qty = Number(l.qty);
       sums[p.id] = round2((sums[p.id] || 0) + qty);
-      if (sums[p.id] > left(rl)) throw new Error(`${p.name} คืนได้ไม่เกิน ${fmt(left(rl), p.unit)} (ยอดที่เบิกไปหักที่คืนแล้ว)`);
-      if (l.rollId && !rl.cuts.some(c => c.rollId === l.rollId)) throw new Error('เลือกได้เฉพาะม้วนที่ใบเบิกนี้ตัดไป');
+      const max = round2(rls.reduce((a, x) => a + left(x), 0)), cuts = rls.flatMap(x => x.cuts);
+      if (sums[p.id] > max) throw new Error(`${p.name} คืนได้ไม่เกิน ${fmt(max, p.unit)} (ยอดที่เบิกไปหักที่คืนแล้ว)`);
+      if (l.rollId && !cuts.some(c => c.rollId === l.rollId)) throw new Error('เลือกได้เฉพาะม้วนที่ใบเบิกนี้ตัดไป');
       let at = null, incoming = null, fromRollId = null;
       if (l.condition === 'ok') {
         at = l.shelf || shelf;
@@ -60,18 +64,22 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
         if (at === S.qcShelf(state, wh.id)) throw new Error('ของที่ใช้ได้เก็บที่ชั้นรอตรวจไม่ได้');
       } else if (l.condition === 'damaged') at = S.qcShelf(state, wh.id);
       if (at) {
-        if (p.isRoll) fromRollId = l.rollId ?? (rl.cuts[0] && rl.cuts[0].rollId) ?? null;
+        if (p.isRoll) fromRollId = l.rollId ?? (cuts[0] && cuts[0].rollId) ?? null;
         incoming = stockIn(state, p, wh.id, { qty, rollLengths: [qty], shelf: at, fromRollId }, true);
       }
-      return { l, rl, p, qty, at, fromRollId, incoming };
+      return { l, rls, p, qty, at, fromRollId, incoming };
     });
 
     const rec = { id: docId('RT-', state.seq.ret++, 4), reqId: req.id, whId: wh.id, byUserId: userId, at: S._.now(), note: String(note || '').trim(), lines: [] };
-    for (const { l, rl, p, qty, at, fromRollId, incoming } of items) {
+    for (const { l, rls, p, qty, at, fromRollId, incoming } of items) {
       const newRollId = incoming && p.isRoll ? docId('R-', state.seq.roll, 6) : null;
       if (incoming) incoming.apply();
-      rl.returned = round2(rl.returned + qty);
-      if (l.condition === 'scrap') rl.scrapped = round2((rl.scrapped || 0) + qty);
+      for (let rest = qty, i = 0; rest > 0 && i < rls.length; i++) {   // เติมทีละบรรทัดไม่เกินยอดคงเหลือของบรรทัดนั้น
+        const take = Math.min(rest, left(rls[i]));
+        rls[i].returned = round2(rls[i].returned + take);
+        if (l.condition === 'scrap') rls[i].scrapped = round2((rls[i].scrapped || 0) + take);
+        rest = round2(rest - take);
+      }
       rec.lines.push({ productId: p.id, qty, condition: l.condition, shelf: at, newRollId, fromRollId: newRollId ? fromRollId : null,
         photo: l.condition === 'damaged' && l.photo ? l.photo : null });
     }
