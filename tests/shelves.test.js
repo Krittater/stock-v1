@@ -33,3 +33,24 @@ test('seed v2: ชั้นวาง + ค่าใหม่', () => {
   assert.equal(s.products.find(p => p.id === 'P-0008').needsApproval, true);
   assert.equal(SM.T.FORBIDDEN, 'คุณทำรายการนี้ไม่ได้ ให้หัวหน้าทำแทน หรือขอให้หัวหน้าเปิดสิทธิ์');
 });
+test('เบิกแล้วไม่ตัดของชั้นรอตรวจ แม้แถว QC มาก่อน', () => {
+  const s = SM.seed();
+  s.stock.unshift({ productId: 'P-0004', whId: 'wh-main', qty: 7, shelf: 'QC' });
+  Object.assign(s.cart, { lines: [{ productId: 'P-0004', qty: 5 }], whId: 'wh-main', jobId: 'J-25-010', note: '' });
+  S.issueNow(s, 'u-eng');
+  assert.equal(s.stock.find(x => x.shelf === 'QC').qty, 7);
+  assert.equal(S.available(s, 'P-0004', 'wh-main'), 25);
+});
+test('ม้วนชั้นรอตรวจไม่นับ และคลังที่มีแต่ของรอตรวจไม่ใช่ "มีของ"', () => {
+  const s = SM.seed();
+  s.rolls.push({ id: 'R-009999', productId: 'P-0017', whId: 'wh-a', shelf: 'QC', length: 100, opened: false });
+  assert.equal(S.available(s, 'P-0017', 'wh-a'), 0);
+  assert.equal(S.totalStock(s, 'P-0017').qty, 0);
+  assert.equal(S.totalStock(s, 'P-0017').rolls, 0);
+  assert.deepEqual(S.qcStock(s, 'wh-a').map(x => x.rollId), ['R-009999']);
+  s.stock.push({ productId: 'P-0004', whId: 'wh-a', qty: 9, shelf: 'QC' });
+  const opts = S.warehouseOptions(s, [{ productId: 'P-0004', qty: 1 }]);
+  const a = opts.find(o => o.wh.id === 'wh-a');
+  assert.equal(a.status, 'none');
+  assert.equal(opts.find(o => o.wh.id === 'wh-main').status, 'full');
+});

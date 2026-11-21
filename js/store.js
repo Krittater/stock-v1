@@ -248,7 +248,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       out = sum(plan.cuts, c => c.cut);      // จ่ายแล้ว = ที่ตัดออกจากม้วนจริงเท่านั้น
     } else {
       let need = plan.give;
-      for (const row of state.stock.filter(x => x.productId === line.productId && x.whId === req.whId)) {
+      for (const row of state.stock.filter(x => x.productId === line.productId && x.whId === req.whId && !QC(x))) {
         const take = Math.min(need, row.qty);
         row.qty = round2(row.qty - take); need = round2(need - take);
         if (take > 0) line.shelf = row.shelf;
