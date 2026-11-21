@@ -56,6 +56,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     send: 'M21 3 10 14 M21 3l-7 18-4-7-7-4z',
     clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M12 7v5l3 2',
     truck: 'M2 6h11v10H2z M13 9h5l3 3v4h-8z M6 19v.01 M17 19v.01',
+    scan: 'M4 8V5a1 1 0 0 1 1-1h3 M16 4h3a1 1 0 0 1 1 1v3 M20 16v3a1 1 0 0 1-1 1h-3 M8 20H5a1 1 0 0 1-1-1v-3 M4 12h16',
     user: 'M12 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8z M4 21a8 8 0 0 1 16 0',
   };
   const Ic = {
@@ -171,6 +172,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
   SM.boot = () => {
     const app = createApp(Shell);
     app.component('ic', Ic);
+    app.component('scan-button', SM.ScanButton);
     Object.assign(app.config.globalProperties, {
       $fmt: SM.fmtQty, $T: SM.T, $S: SM.store,
       $product: (id) => SM.state.products.find(p => p.id === id),

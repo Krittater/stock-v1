@@ -336,3 +336,4 @@ dialog.dlg::backdrop { background: rgb(12 16 15 / .55); }
 .msg a, .card p a { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; font-weight: 500; }
 .userbar select { max-width: 300px; }
 .userbar-in > button { margin-left: auto; }
+.scan-vid { width: 100%; max-height: 40vh; border-radius: var(--r-md); background: #000; object-fit: cover; }
