@@ -471,19 +471,8 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     return cc;
   };
 
-  S.similarJobs = function (state, name) {
-    const n = norm(name);
-    if (!n) return [];
-    return state.jobs.filter(j => j.open && (similarity(j.name, n) >= 0.6 || (n.length >= 4 && norm(j.name).includes(n))));
-  };
+  // S.similarJobs / S.createJob ย้ายไปอยู่ js/domain/jobs.js
 
-  S.createJob = function (state, { name, customer }) {
-    const n = (name || '').trim();
-    if (!n) throw new Error('กรุณาระบุชื่องาน');
-    const job = { id: 'J-26-' + String(state.seq.job++).padStart(3, '0'), name: n, customer: (customer || '').trim(), open: true };
-    state.jobs.push(job);
-    return job;
-  };
   /* ---------- ชั้นวาง · ชั้นรอตรวจ · ประวัติ ---------- */
 
   S.shelves = (state, whId, { qc = false } = {}) =>

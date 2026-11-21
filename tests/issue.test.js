@@ -71,7 +71,7 @@ test('ไม่อนุมัติ', () => {
 test('ระบบปฏิเสธ: state ไม่เปลี่ยน ฟอร์มยังอยู่', () => {
   const s = SM.seed(); fill(s, [{ productId: 'P-0004', qty: 5 }]);
   s.jobs.find(j => j.id === 'J-25-010').open = false;
-  assert.throws(() => S.issueNow(s, 'u-eng'), /งาน J-25-010 ปิดไปแล้ว เลือกงานอื่น/);
+  assert.throws(() => S.issueNow(s, 'u-eng'), /งาน J-25-010 ปิดไปแล้ว เบิกเพิ่มไม่ได้/);
   assert.equal(s.cart.lines.length, 1);
   assert.equal(s.reqs.length, 1);                                       // มีแค่ใบ seed
   s.jobs.find(j => j.id === 'J-25-010').open = true; s.warehouses[0].locked = true;

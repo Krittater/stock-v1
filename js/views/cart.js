@@ -19,14 +19,14 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     props: { initialName: String },
     emits: ['close', 'picked'],
     data() { return { s: SM.state, T, name: this.initialName || '', customer: '' }; },
-    computed: { similar() { return S.similarJobs(this.s, this.name).slice(0, 3); } },
+    computed: { similar() { return S.similarJobs(this.s, this.name).filter(x => x.job.open).slice(0, 3); } },
     mounted() { this.$refs.dlg.showModal(); },
     methods: {
       close() { this.$refs.dlg.close(); this.$emit('close'); },
       use(job) { this.$emit('picked', job); this.close(); },
       save() {
         try {
-          const job = S.createJob(this.s, { name: this.name, customer: this.customer });
+          const job = S.createJob(this.s, { name: this.name, customer: this.customer }, this.s.currentUserId);
           SM.toast('ok', T.N52(job)); this.use(job);
         } catch (e) { SM.toast('bad', T.N53(e.message), 5000); }
       },
@@ -39,7 +39,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     <div class="dlg-body">
       <div class="field"><label for="jd-name" class="req">ชื่องาน</label>
         <input id="jd-name" class="input" v-model="name" placeholder="เช่น ติดตั้งแอร์ ห้องประชุม" autocomplete="off">
-        <div v-for="j in similar" :key="j.id" class="msg warn"><ic n="warn"/>
+        <div v-for="{ job: j } in similar" :key="j.id" class="msg warn"><ic n="warn"/>
           <div class="grow stack"><span>{{ T.N51(j) }}</span><button type="button" class="btn" @click="use(j)">ใช้งานนี้</button></div></div>
       </div>
       <div class="field"><label for="jd-cust">ลูกค้าหรือสถานที่</label><input id="jd-cust" class="input" v-model="customer"></div>

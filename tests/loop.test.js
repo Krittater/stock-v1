@@ -1,5 +1,5 @@
 const test = require('node:test'); const assert = require('node:assert');
-require('../js/seed.js'); require('../js/text.js'); const SM = require('../js/store.js'); require('../js/domain/returns.js'); require('../js/domain/products.js');
+require('../js/seed.js'); require('../js/text.js'); const SM = require('../js/store.js'); require('../js/domain/returns.js'); require('../js/domain/products.js'); require('../js/domain/jobs.js');
 const S = SM.store;
 const fill = (s, lines) => Object.assign(s.cart, { lines, whId: 'wh-main', jobId: 'J-25-010', note: '' });
 const texts = (s, uid) => s.notifs.filter(n => n.toUserId === uid).map(n => n.text);
@@ -101,9 +101,9 @@ test('Store ตอบไม่มีของ → สร้าง PR ให้�
 
 test('งานใหม่', () => {
   const s = SM.seed();
-  assert.deepEqual(S.similarJobs(s, 'เดินสาย LAN โรงงาน').map(j => j.id), ['J-24-045']);
+  assert.deepEqual(S.similarJobs(s, 'เดินสาย LAN โรงงาน').map(x => x.job.id), ['J-24-045']);
   assert.deepEqual(S.similarJobs(s, 'ติดตั้งแอร์ ห้องประชุม'), []);
-  assert.throws(() => S.createJob(s, { name: '  ' }), /กรุณาระบุชื่องาน/);
-  const j = S.createJob(s, { name: 'ติดตั้งแอร์ ห้องประชุม', customer: '' });
-  assert.deepEqual([j.id, j.open], ['J-26-011', true]);
+  assert.throws(() => S.createJob(s, { name: '  ' }, 'u-eng'), /กรุณาระบุชื่องาน/);
+  const j = S.createJob(s, { name: 'ติดตั้งแอร์ ห้องประชุม', customer: '' }, 'u-eng');
+  assert.deepEqual([j.id, j.open], ['J-26-001', true]);
 });
