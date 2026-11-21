@@ -132,7 +132,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       resLine(l) {
         const p = this.$product(l.productId), u = p.unit, notes = [];
         const pr = this.result.prs.find(x => x.productId === l.productId);
-        const cc = this.s.ccs.find(c => c.status === 'pending' && c.productId === l.productId && c.whId === this.result.req.whId);
+        const cc = this.s.ccs.find(c => (c.stage === 'store' || c.stage === 'head') && c.productId === l.productId && c.whId === this.result.req.whId);
         for (const c of l.cuts) notes.push({ tone: '', text: `${T.N44(c.rollId, c.shelf)} · ตัด ${this.$fmt(c.cut, u)} · เหลือ ${this.$fmt(c.left, u)}${c.left <= 0 ? ' (หมดม้วน)' : ''}` });
         if (l.shelf && l.issued > 0) notes.push({ tone: '', text: `หยิบจากชั้น ${l.shelf}` });
         if (pr) notes.push({ tone: 'warn', text: l.issued > 0 ? T.N58b(this.$fmt(pr.qty, u), pr.id) : T.N59a(pr.id) });

@@ -1,5 +1,5 @@
 const test = require('node:test'); const assert = require('node:assert');
-require('../js/seed.js'); require('../js/text.js'); const SM = require('../js/store.js'); require('../js/domain/products.js');
+require('../js/seed.js'); require('../js/text.js'); const SM = require('../js/store.js'); require('../js/domain/products.js'); require('../js/domain/opening.js');
 const S = SM.store, T = SM.T;
 const mk = (s, extra = {}, uid = 'u-eng') => S.createProduct(s, { name: 'น็อตสแตนเลส M8', category: 'น็อตและสกรู', unit: 'ตัว', ...extra }, uid);
 const P = (s, id) => s.products.find(p => p.id === id);
@@ -152,7 +152,7 @@ test('hasHistory: ยอดศูนย์แต่มีม้วน/ใบเ�
   const r = fresh('H-roll'), q = fresh('H-req'), c = fresh('H-cc'), pr = fresh('H-pr');
   s.rolls.push({ id: 'R-999999', productId: r, whId: 'wh-main', shelf: 'ทั่วไป', length: 0 });
   s.reqs.push({ id: 'REQ-X', userId: 'u-eng', whId: 'wh-main', jobId: 'J-25-010', lines: [{ productId: q, qty: 1, issued: 0, reserved: 0, returned: 0, cuts: [] }] });
-  s.ccs.push({ id: 'CC-X', productId: c, whId: 'wh-main', status: 'pending' });
+  s.ccs.push({ id: 'CC-X', productId: c, whId: 'wh-main', stage: 'store' });
   s.prs.push({ id: 'PR-X', productId: pr, whId: 'wh-main', status: 'open' });
   for (const id of [r, q, c, pr]) assert.equal(S.hasHistory(s, id), true, id);
 });

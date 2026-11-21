@@ -9,8 +9,9 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     computed: {
       user() { return this.s.users.find(u => u.id === this.s.currentUserId); },
       allowed() { return this.user.role !== 'engineer'; },
-      reqs() { return this.user.role === 'head' ? this.s.reqs.filter(r => r.status === 'pending_approval') : []; },
-      ccs() { return this.s.ccs.filter(c => c.status === 'pending'); },
+      items() { return S.approvalItems(this.s, this.user.id); },
+      reqs() { return this.items.reqs; },
+      ccs() { return this.items.ccs; },
     },
     methods: {
       run(fn, okText) {
@@ -54,12 +55,12 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     <section v-if="ccs.length" class="stack" aria-labelledby="ap-cc">
       <h2 id="ap-cc">ยอดตั้งต้นรอยืนยัน ({{ ccs.length }})</h2>
       <article v-for="c in ccs" :key="c.id" class="card stack">
-        <div class="row wrap"><b class="mono grow">{{ c.id }}</b><span class="tag info"><ic n="clock"/>รอยืนยันยอด</span></div>
+        <div class="row wrap"><b class="mono grow">{{ c.id }}</b><span class="tag info"><ic n="clock"/>{{ c.stage === 'head' ? 'รอหัวหน้าอนุมัติยอด' : 'รอ Store ยืนยันยอด' }}</span></div>
         <div class="row" style="align-items:flex-start"><img class="thumb" :src="$product(c.productId).img" alt="" @error="$noImg">
           <div class="grow"><p><b>{{ $product(c.productId).name }}</b></p>
             <p>{{ $userOf(c.byUserId).name }} แจ้งว่ามี <b>{{ c.text }}</b> ที่{{ $wh(c.whId).name }}</p></div></div>
         <div v-if="rejecting === c.id" class="stack">
-          <div class="field"><label :for="'why-' + c.id" class="req">เหตุผล (เช่น หาไม่เจอที่ชั้น)</label><input :id="'why-' + c.id" class="input" v-model="reason"></div>
+          <div class="field"><label :for="'why-' + c.id" class="req">เหตุผล (จะแจ้งผู้ขอ)</label><input :id="'why-' + c.id" class="input" v-model="reason"></div>
           <p v-if="err" class="err" role="alert">{{ err }}</p>
           <div class="row res-btns"><button class="btn" @click="rejecting = null">ยกเลิก</button><button class="btn danger" @click="deny(c)">ยืนยันว่าไม่มีของ</button></div>
         </div>

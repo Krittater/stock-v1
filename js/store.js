@@ -115,7 +115,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     lines.length > 0 && lines.every(l => S.qtyError(product(state, l.productId), l.qty) === null);
 
   const pendingCC = (state, productId, whId) =>
-    state.ccs.find(c => c.status === 'pending' && c.productId === productId && c.whId === whId) || null;
+    state.ccs.find(c => (c.stage === 'store' || c.stage === 'head') && c.productId === productId && c.whId === whId) || null;
 
   S.planLine = function (state, line, whId) {
     const p = product(state, line.productId);
@@ -346,15 +346,15 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
   };
 
   // ตรวจจำนวนที่จะเข้าคลัง แล้วคืนฟังก์ชันที่ลงยอดจริง (แยกตรวจกับทำ เพื่อไม่ให้ลงยอดครึ่งเดียว)
-  function stockIn(state, p, whId, { qty, rollLengths, shelf = 'ทั่วไป', batch, fromRollId }, opened = false) {
+  function stockIn(state, p, whId, { qty, rollLengths, shelf = 'ทั่วไป', batch, fromRollId, rollIds, initials }, opened = false) {
     const sh = (byId2(state.warehouses, whId)?.shelves || []).find(x => x.code === shelf);
     if (!sh || !sh.active) throw new Error(`ที่วาง ${shelf} ปิดใช้งานอยู่ (เปิดใช้อีกครั้งก่อน)`);
     if (p.isRoll) {
       const lengths = (rollLengths || []).map(Number);
       if (!lengths.length || lengths.some(n => !(n > 0))) throw new Error(T.N14.rolls);
       return { amount: round2(sum(lengths, n => n)), text: `${lengths.length} ม้วน ${fmt(sum(lengths, n => n), 'm')}`, apply() {
-        for (const length of lengths)
-          state.rolls.push({ id: docId('R-', state.seq.roll++, 6), productId: p.id, whId, shelf, length, opened, batch, fromRollId });
+        lengths.forEach((length, i) => state.rolls.push({ id: rollIds?.[i] || docId('R-', state.seq.roll++, 6), productId: p.id, whId, shelf, length, opened, batch, fromRollId,
+          ...(initials?.[i] ? { initial: initials[i] } : {}) }));
       } };
     }
     const err = S.qtyError(p, qty);
@@ -438,26 +438,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     return made;
   }
 
-  S.confirmCC = function (state, ccId, userId, ok, reason = '') {
-    const cc = byId(state.ccs, ccId);
-    if (!cc || cc.status !== 'pending') throw new Error('รายการนี้ไม่ได้รอยืนยันยอด');
-    const p = product(state, cc.productId);
-    if (ok) {
-      openWh(state, cc.whId);
-      const incoming = stockIn(state, p, cc.whId, cc);
-      incoming.apply(); cc.status = 'ok';
-      S.notify(state, [cc.byUserId], 'ok', T.N72(p.name, incoming.text));
-      reserveForWaiting(state, p.id, cc.whId);
-      ensurePRs(state, p.id, cc.whId);       // ใบที่ยอดนี้ไม่พอให้ ต้องไปอยู่ในรายการต้องซื้อ
-      return cc;
-    }
-    if (!reason.trim()) throw new Error('กรุณาระบุเหตุผล');
-    cc.status = 'rejected'; cc.reason = reason.trim();
-    // ponytail: คำถามเปิดข้อ 2 ยังไม่ตัดสิน — ทำตามคำแนะนำ BA: สร้างรายการต้องซื้อให้ใบเบิกที่รอยอดนี้อยู่
-    const waiting = ensurePRs(state, p.id, cc.whId);
-    S.notify(state, [cc.byUserId], 'warn', T.N73(p.name, cc.reason, waiting));
-    return cc;
-  };
+  // S.confirmCC / S.submitOpening ย้ายไปอยู่ js/domain/opening.js
 
   // S.similarJobs / S.createJob ย้ายไปอยู่ js/domain/jobs.js
 

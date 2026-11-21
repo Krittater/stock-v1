@@ -3,7 +3,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
 // สินค้า: สร้าง · แก้ตามบทบาท · เลิกใช้ · ต้องอนุมัติตามหมวด · รูป · บาร์โค้ดซ้ำ
 (function () {
   const S = SM.store, T = SM.T, fmt = SM.fmtQty;
-  const { stockIn, openWh, docId, usersWith, round2, similarity, norm } = S._;
+  const { stockIn, openWh, docId, round2, similarity, norm } = S._;
   const byId = (list, id) => list.find(x => x.id === id);
   const role = (state, userId) => byId(state.users, userId).role;
   const NO_PHOTO23 = 'เพิ่มรูปที่ 2-3 ได้เฉพาะคลังสินค้าและหัวหน้า', MAX_PHOTO = 'ใส่รูปได้ไม่เกิน 3 รูปต่อสินค้า';
@@ -68,25 +68,17 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       reorderPoint: num(input.reorderPoint, 0, 0), scrapMin: num(input.scrapMin, isRoll ? 3 : 0, 0), photos,
       needsApproval: state.approvalCats.includes(category) || (me === 'head' && !!input.needsApproval),   // Q4: คนอื่นติ๊กเองไม่ได้
     };
-    let incoming = null;
-    if (input.opening) { openWh(state, input.opening.whId); incoming = stockIn(state, p, input.opening.whId, input.opening); }
+    const op = input.opening;
+    if (op) { openWh(state, op.whId); stockIn(state, p, op.whId, op); }   // ตรวจก่อนสร้าง ยอดผิดจะไม่สร้างสินค้า
 
     p.id = docId('P-', state.seq.product++, 4);
     state.products.push(p);
     S.log(state, userId, 'product-create', p.id, `สร้างสินค้า ${p.name} หมวด ${p.category}`);
-    if (!incoming) return { product: p, cc: null, toast: T.N20(p) };
-    if (me !== 'engineer') {     // Store/หัวหน้า คุมตัวเลขสต็อกได้ ลงยอดทันที
-      incoming.apply();
-      return { product: p, cc: null, toast: T.N21(p, incoming.text) };
-    }
-    const cc = {
-      id: docId('CC-', state.seq.cc++, 4), productId: p.id, whId: input.opening.whId, byUserId: userId, status: 'pending', reason: '',
-      qty: p.isRoll ? null : Number(input.opening.qty), rollLengths: p.isRoll ? input.opening.rollLengths.map(Number) : null, text: incoming.text,
-    };
-    state.ccs.push(cc);
-    S.notify(state, usersWith(state, 'store', 'head'), 'info',
-      T.N71(cc.id, p.name, incoming.text, byId(state.warehouses, cc.whId).name), '#/approvals');
-    return { product: p, cc, toast: T.N22(p, incoming.text, cc.id) };
+    if (!op) return { product: p, cc: null, toast: T.N20(p) };
+    try {   // สร้างสินค้าแล้วค่อยส่งยอด ถ้าส่งพัง สินค้ายังอยู่ (5B.5)
+      const r = S.submitOpening(state, { productId: p.id, whId: op.whId, qty: op.qty, rollLengths: op.rollLengths, kind: 'opening' }, userId);
+      return { product: p, cc: r.cc, toast: `สร้าง ${p.id} แล้ว · ${r.toast}` };
+    } catch (e) { return { product: p, cc: null, toast: T.N22x(e.message) }; }
   };
 
   S.updateProduct = function (state, id, patch, userId) {

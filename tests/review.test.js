@@ -1,6 +1,6 @@
 // กรณีที่ผู้ตรวจอิสระพบ (final review): แต่ละข้อคือบั๊กที่เคยเกิดจริง
 const test = require('node:test'); const assert = require('node:assert');
-require('../js/seed.js'); require('../js/text.js'); const SM = require('../js/store.js'); require('../js/domain/products.js'); require('../js/domain/receiving.js');
+require('../js/seed.js'); require('../js/text.js'); const SM = require('../js/store.js'); require('../js/domain/products.js'); require('../js/domain/receiving.js'); require('../js/domain/opening.js');
 const S = SM.store;
 const fill = (s, lines, whId = 'wh-main') => Object.assign(s.cart, { lines, whId, jobId: 'J-25-010', note: '' });
 const rollSum = (s, pid, wh) => s.rolls.filter(r => r.productId === pid && r.whId === wh).reduce((a, r) => a + r.length, 0);

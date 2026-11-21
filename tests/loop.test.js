@@ -1,5 +1,5 @@
 const test = require('node:test'); const assert = require('node:assert');
-require('../js/seed.js'); require('../js/text.js'); const SM = require('../js/store.js'); require('../js/domain/returns.js'); require('../js/domain/receiving.js'); require('../js/domain/products.js'); require('../js/domain/jobs.js');
+require('../js/seed.js'); require('../js/text.js'); const SM = require('../js/store.js'); require('../js/domain/returns.js'); require('../js/domain/receiving.js'); require('../js/domain/products.js'); require('../js/domain/opening.js'); require('../js/domain/jobs.js');
 const S = SM.store;
 const fill = (s, lines) => Object.assign(s.cart, { lines, whId: 'wh-main', jobId: 'J-25-010', note: '' });
 const texts = (s, uid) => s.notifs.filter(n => n.toUserId === uid).map(n => n.text);
@@ -70,7 +70,7 @@ test('สร้างสินค้า: ชื่อซ้ำ/คล้าย, 
   assert.equal(a.toast, 'สร้าง P-0020 แล้ว · ลงยอด 200 ตัว เข้าคลังแล้ว');
   const b = S.createProduct(s, { name: 'สายไฟ THW 1x4 sq.mm สีแดง', category: 'สายไฟ', unit: 'ตัว', isRoll: true,
     opening: { whId: 'wh-main', rollLengths: [100, 100, 100] } }, 'u-eng');
-  assert.deepEqual([b.product.unit, b.cc.id, b.cc.status, S.available(s, b.product.id, 'wh-main')], ['m', 'CC-0007', 'pending', 0]);
+  assert.deepEqual([b.product.unit, b.cc.id, b.cc.stage, S.available(s, b.product.id, 'wh-main')], ['m', 'CC-0007', 'store', 0]);
   assert.equal(S.cableFacets(b.product).color, 'แดง');
   assert.equal(b.product.category, 'สายไฟ');
   assert.ok(texts(s, 'u-store').some(t => /CC-0007/.test(t)));
@@ -86,7 +86,7 @@ test('ใบเบิกรอยอดที่ Store ยังไม่ยื�
   const { outcome, req, prs } = S.issueNow(s, 'u-eng');
   assert.deepEqual([outcome, prs.length], ['waiting', 0]);               // ไม่สร้าง PR (IP-AC39)
   S.confirmCC(s, cc.id, 'u-store', true);
-  assert.deepEqual([cc.status, req.status, req.lines[0].reserved, S.available(s, product.id, 'wh-main')], ['ok', 'ready', 10, 40]);
+  assert.deepEqual([cc.stage, req.status, req.lines[0].reserved, S.available(s, product.id, 'wh-main')], ['done', 'ready', 10, 40]);
   assert.throws(() => S.confirmCC(s, cc.id, 'u-store', true), /ไม่ได้รอยืนยัน/);
 });
 

@@ -78,9 +78,8 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       notifs() { return this.s.notifs.filter(n => n.toUserId === this.user.id).slice().reverse(); },
       unread() { return this.notifs.filter(n => !n.read).length; },
       pending() {
-        const cc = this.s.ccs.filter(c => c.status === 'pending').length;
-        if (this.user.role === 'head') return cc + this.s.reqs.filter(r => r.status === 'pending_approval').length;
-        return this.user.role === 'store' ? cc : 0;
+        const a = SM.store.approvalItems(this.s, this.user.id);
+        return a.ccs.length + a.reqs.length;
       },
       nav() {
         const items = [['shop', 'เบิกของ', 'shop'], ['orders', 'ใบเบิก', 'list'], ['returns', 'คืนของ', 'undo'], ['restock', 'เติมสต็อก', 'box']];
