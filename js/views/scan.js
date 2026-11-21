@@ -15,7 +15,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     beforeUnmount() { this.stop(); },
     methods: {
       show() {
-        this.open = true; this.code = ''; this.err = ''; this.camErr = '';
+        this.open = true; this.code = ''; this.last = null; this.err = ''; this.camErr = '';
         this.$nextTick(() => { this.$refs.dlg.showModal(); this.$refs.inp.focus(); if (this.cam) this.start(); });
       },
       close() { this.stop(); if (this.$refs.dlg && this.$refs.dlg.open) this.$refs.dlg.close(); this.open = false; },
@@ -33,8 +33,12 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
           const det = new BarcodeDetector();
           const tick = async () => {
             if (!this.stream) return;
-            try { const [b] = await det.detect(v); if (b && b.rawValue) { this.code = b.rawValue; return this.submit(b.rawValue); } } catch (e) { /* เฟรมนี้อ่านไม่ได้ ลองใหม่ */ }
-            this.timer = setTimeout(tick, 300);
+            try {
+              const [b] = await det.detect(v);
+              if (b && b.rawValue && b.rawValue !== this.last) { this.last = b.rawValue; this.code = b.rawValue; this.submit(b.rawValue); }
+              else if (!b) this.last = null;   // ออกจากเฟรมแล้ว สแกนรหัสเดิมซ้ำได้
+            } catch (e) { /* เฟรมนี้อ่านไม่ได้ ลองใหม่ */ }
+            if (this.stream) this.timer = setTimeout(tick, 300);   // ปิดแล้ว stream เป็น null → หยุด
           };
           tick();
         } catch (e) { this.camErr = 'เปิดกล้องไม่ได้ พิมพ์รหัสแทนได้'; }
