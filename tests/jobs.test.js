@@ -120,8 +120,6 @@ test('JB-AC9 closeJobCheck: ของยังไม่คืน + PR ค้า�
 
 test('closeReq ปล่อยของที่กันไว้ ยอดพร้อมเบิกเพิ่ม และส่งต่อให้ใบที่รออยู่', () => {
   const s = SM.seed();
-  const stock = s.stock.filter(x => x.productId === 'P-0007' && x.whId === 'wh-main' && x.shelf !== 'QC');
-  const total = stock.reduce((a, x) => a + x.qty, 0);
   addReq(s, 'REQ-690020', 'partial', [line({ qty: 10, issued: 2, reserved: 8 })]);
   const before = S.available(s, 'P-0007', 'wh-main');
   addReq(s, 'REQ-690021', 'waiting', [line({ qty: 3 })], 'J-25-002');
@@ -130,7 +128,6 @@ test('closeReq ปล่อยของที่กันไว้ ยอดพ�
   assert.deepEqual([r.status, r.lines[0].reserved], ['closed', 0]);
   assert.equal(s.reqs.find(x => x.id === 'REQ-690021').status, 'ready');   // ได้ของที่ปล่อย
   assert.equal(S.available(s, 'P-0007', 'wh-main'), before + 5);
-  assert.ok(total > 0);
   assert.throws(() => S.closeReq(s, 'REQ-690020', 'u-store'), /^Error: ใบนี้ปิดไม่ได้$/);
 });
 
@@ -151,4 +148,21 @@ test('cloneJob คัดลอก ลูกค้า ไซต์ ผู้ร�
   S.updateJob(s, 'J-25-010', { site: 'ระยอง' }, 'u-eng');
   const c = S.cloneJob(s, 'J-25-010', 'u-store');
   assert.deepEqual([c.name, c.customer, c.site, c.ownerId, c.open], ['ไซต์งาน A เฟส 2 (ใหม่)', 'บจก. มาบตาพุด เคมิคอล', 'ระยอง', 'u-eng', true]);
+});
+
+test('closeReq รับใบ ready ที่จ่ายแล้วบางส่วน: ยกเลิก PR ตามค่าเริ่ม / cancelPRs:false คง PR', () => {
+  const mk = () => {
+    const s = SM.seed();
+    addReq(s, 'REQ-690020', 'ready', [line({ qty: 10, issued: 4, reserved: 6 })]);
+    s.prs.push({ id: 'PR-1', reqId: 'REQ-690020', productId: 'P-0007', whId: 'wh-main', qty: 5, received: 0, status: 'open', at: 'x' });
+    return s;
+  };
+  const s = mk();
+  S.closeReq(s, 'REQ-690020', 'u-store');
+  assert.deepEqual([s.reqs.find(r => r.id === 'REQ-690020').status, s.prs[0].status], ['closed', 'cancelled']);
+  const s2 = mk();
+  S.closeReq(s2, 'REQ-690020', 'u-store', { cancelPRs: false });
+  assert.equal(s2.prs[0].status, 'open');
+  const s3 = mk(); s3.reqs[s3.reqs.length - 1].lines[0].issued = 0;
+  assert.throws(() => S.closeReq(s3, 'REQ-690020', 'u-store'), /^Error: ใบนี้ปิดไม่ได้$/);
 });

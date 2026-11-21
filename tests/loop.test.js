@@ -105,5 +105,5 @@ test('งานใหม่', () => {
   assert.deepEqual(S.similarJobs(s, 'ติดตั้งแอร์ ห้องประชุม'), []);
   assert.throws(() => S.createJob(s, { name: '  ' }, 'u-eng'), /กรุณาระบุชื่องาน/);
   const j = S.createJob(s, { name: 'ติดตั้งแอร์ ห้องประชุม', customer: '' }, 'u-eng');
-  assert.deepEqual([j.id, j.open], ['J-26-001', true]);
+  assert.deepEqual([j.id, j.open], [`J-${new Date().toISOString().slice(2, 4)}-001`, true]);
 });

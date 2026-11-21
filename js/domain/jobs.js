@@ -106,7 +106,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
 
   S.closeReq = function (state, reqId, userId, { cancelPRs = true } = {}) {
     const req = byId(state.reqs, reqId);
-    if (!req || req.status !== 'partial') throw new Error('ใบนี้ปิดไม่ได้');
+    if (!req || !OPEN.includes(req.status) || !req.lines.some(l => l.issued > 0)) throw new Error('ใบนี้ปิดไม่ได้');
     return finish(state, req, 'closed', userId, cancelPRs, 'ปิดใบเบิก');
   };
 
