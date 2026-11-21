@@ -9,7 +9,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
   const newLine = (l) => ({ qty: '', cond: 'ok', rollId: rollsOf(l)[0] || '', photo: null, busy: false, tok: 0, shelf: '' });
 
   // ย่อรูปเหลือด้านยาวไม่เกิน 320px เก็บเป็น dataURL
-  const shrink = (file) => new Promise((ok, no) => {
+  const shrink = SM.shrinkImage = (file) => new Promise((ok, no) => {
     const url = URL.createObjectURL(file), img = new Image();
     img.onload = () => {
       const k = Math.min(1, 320 / Math.max(img.width, img.height)), c = document.createElement('canvas');

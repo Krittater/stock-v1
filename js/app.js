@@ -67,7 +67,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
   };
 
   const ROLE = { engineer: 'วิศวกร', store: 'Store', head: 'หัวหน้า' };
-  const TITLES = { shop: 'เบิกของ', cart: 'ตะกร้า', orders: 'ใบเบิกที่ผ่านมา', returns: 'คืนของ', qc: 'ชั้นรอตรวจ', restock: 'เติมสต็อก', approvals: 'อนุมัติ' };
+  const TITLES = { shop: 'เบิกของ', cart: 'ตะกร้า', orders: 'ใบเบิกที่ผ่านมา', returns: 'คืนของ', qc: 'ชั้นรอตรวจ', restock: 'เติมสต็อก', approvals: 'อนุมัติ', products: 'สินค้า' };
 
   const Shell = {
     data: () => ({ s: SM.state, ui: SM.ui, ROLE }),
@@ -85,6 +85,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
       nav() {
         const items = [['shop', 'เบิกของ', 'shop'], ['orders', 'ใบเบิก', 'list'], ['returns', 'คืนของ', 'undo'], ['restock', 'เติมสต็อก', 'box']];
         if (this.user.role !== 'engineer') items.push(['approvals', 'อนุมัติ', 'shield']);
+        items.push(['products', 'สินค้า', 'box']);   // มือถือ: ปุ่มนี้ซ่อน (เมนูล่างเต็ม 5 ช่อง) ใช้ลิงก์ในแถบผู้ใช้แทน
         return items.map(([name, label, icon]) => ({ name, label, icon }));
       },
     },
@@ -132,6 +133,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     <select id="user-sel" v-model="s.currentUserId" class="grow">
       <option v-for="u in s.users" :key="u.id" :value="u.id">{{ u.name }} · {{ ROLE[u.role] }}</option>
     </select>
+    <a class="btn ghost" href="#/products" :aria-current="ui.route.name === 'products' ? 'page' : null"><ic n="box"/>สินค้า</a>
     <button class="btn ghost icon" @click="setDark(!ui.dark)" :aria-label="ui.dark ? 'เปลี่ยนเป็นโหมดสว่าง' : 'เปลี่ยนเป็นโหมดมืด'"><ic :n="ui.dark ? 'sun' : 'moon'"/></button>
     <div style="position:relative">
       <button class="btn ghost" @click="toggle('demo')" :aria-expanded="ui.pop === 'demo'"><ic n="sliders"/>เดโม</button>
@@ -151,7 +153,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
 <div v-if="ui.pop" class="backdrop" @click="ui.pop = null"></div>
 <div class="layout">
   <nav class="nav" aria-label="เมนูหลัก">
-    <a v-for="n in nav" :key="n.name" :href="'#/' + n.name" :aria-current="isCurrent(n.name) ? 'page' : null">
+    <a v-for="n in nav" :key="n.name" :href="'#/' + n.name" :class="{ wide: n.name === 'products' }" :aria-current="isCurrent(n.name) ? 'page' : null">
       <ic :n="n.icon"/>{{ n.label }}
       <span v-if="n.name === 'approvals' && pending" class="badge">{{ pending }}</span>
     </a>
@@ -174,6 +176,7 @@ var SM = (typeof window !== 'undefined' ? window : globalThis).SM ||= {};
     const app = createApp(Shell);
     app.component('ic', Ic);
     app.component('scan-button', SM.ScanButton);
+    app.component('product-dialog', SM.ProductDialog);
     Object.assign(app.config.globalProperties, {
       $fmt: SM.fmtQty, $T: SM.T, $S: SM.store,
       $product: (id) => SM.state.products.find(p => p.id === id),
